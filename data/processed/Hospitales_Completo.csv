@@ -1,0 +1,134 @@
+nombre,localidad,provincia,capacidad,latitud,longitud
+Hospital Virgen del Mar,Almería,Almería,76,36.8560698,-2.4176148
+Hospital Universitario Torrecardenas,Almería,Almería,779,36.862595,-2.4411417
+Hospital La Inmaculada,Huércal-Overa,Almería,184,37.401403,-1.9420356
+Hospital Universitario de Poniente,"Ejido, El",Almería,281,36.75347678726159,-2.8038363323030704
+Hospital Mediterráneo,Almería,Almería,89,36.8203668,-2.4353198
+Hospital de Alta Resolución El Toyo,Almería,Almería,44,36.8506884,-2.3126778
+Hospital Materno Infantil,Almería,Almería,204,36.8623121,-2.4421624
+Hospital General Santa Maria del Puerto,"Puerto de Santa María, El",Cádiz,238,36.5946413,-6.2310818
+Hospital San Juan Grande,Jerez de la Frontera,Cádiz,143,36.6915157,-6.1497398
+Hospital San Rafael,Cádiz,Cádiz,280,36.5331508,-6.3020467
+Hospital Punta de Europa,Algeciras,Cádiz,270,36.1106691,-5.4416288
+Hospital Universitario Puerta del Mar,Cádiz,Cádiz,674,36.5090498,-6.2778269
+Hospital Universitario de Jerez de La Frontera,Jerez de la Frontera,Cádiz,484,36.69903046430843,-6.148872652954207
+Hospital Universitario de Puerto Real,Puerto Real,Cádiz,319,36.5201292,-6.1516662
+Hospital Nuestra Sra. de La Salud Ha S.L.,Cádiz,Cádiz,58,36.5318578,-6.2950692
+Hospital Virgen de Las Montañas,Villamartín,Cádiz,108,36.86274637864793,-5.649537072771826
+Hospital Virgen del Camino,Sanlúcar de Barrameda,Cádiz,118,36.7680481,-6.360117
+Hospital Jerez Puerta del Sur,Jerez de la Frontera,Cádiz,98,36.6694306,-6.1397898
+Clínica Los Álamos,Jerez de la Frontera,Cádiz,15,36.7041441,-6.1304849
+Hospital Viamed Novo Sancti Petri,Chiclana de la Frontera,Cádiz,37,36.35642215942627,-6.159121176502401
+Hospital Viamed Bahía de Cádiz,Chiclana de la Frontera,Cádiz,46,36.4208846,-6.1500839
+Hospital Quirón Campo de Gibraltar,"Barrios, Los",Cádiz,77,36.1858023,-5.4303454
+Hospital de La Línea de La Concepción,"Línea de la Concepción, La",Cádiz,243,36.1748056,-5.3536419
+Hospital San Carlos de San Fernando,San Fernando,Cádiz,66,36.4800183,-6.1951603
+Hospital de Alta Resolución de Especialidades de La Janda,Vejer de la Frontera,Cádiz,24,36.25105672708178,-5.981391103489693
+Hospital Infanta Margarita,Cabra,Córdoba,232,37.4683898,-4.4247256
+Hospital Universitario Reina Sofia,Córdoba,Córdoba,607,37.868403,-4.797183
+Hospital Provincial,Córdoba,Córdoba,389,37.8688243,-4.7917176
+Hospital Los Morales,Córdoba,Córdoba,19,37.9341566,-4.8048659
+Hospital Materno - Infantil del H.U. Reina Sofia,Córdoba,Córdoba,194,37.8717644,-4.7881271
+Hospital Valle de Los Pedroches,Pozoblanco,Córdoba,142,38.38405643813727,-4.848779996883012
+Hospital San Juan de Dios de Córdoba,Córdoba,Córdoba,205,37.9094734,-4.7927779
+Hospital Cruz Roja de Córdoba,Córdoba,Córdoba,138,37.8801729,-4.7846459
+Hospital de Montilla,Montilla,Córdoba,73,37.5649758,-4.6487107
+Hospital de Alta Resolución de Puente Genil,Puente Genil,Córdoba,24,37.3991233,-4.7507025
+Hospital de Alta Resolución Valle del Guadiato,Peñarroya-Pueblonuevo,Córdoba,17,38.308629,-5.2707314
+Hospital Quironsalud Córdoba,Córdoba,Córdoba,115,37.8723309,-4.8019351
+Hospital Centro de Andalucía,Lucena,Córdoba,196,37.3886594,-4.5089373
+Hospital Palma del Rio,Córdoba,Córdoba,20,37.7013872,-5.2692839
+Hospital de La Inmaculada Concepción,Granada,Granada,95,37.1641908,-3.6080793
+Hospital de Baza,Baza,Granada,117,37.5003048,-2.7520943
+Hospital Universitario Virgen de Las Nieves,Granada,Granada,844,37.1929345,-3.6071806
+Hospital Materno-Infantil del H.U. Virgen de Las Nieves,Granada,Granada,230,37.1887736,-3.6110134
+Hospital Santa Ana,Motril,Granada,184,36.7553547,-3.5204344
+Hospital San Rafael,Granada,Granada,166,37.1809748,-3.6030677
+Hospital de Alta Resolución de Guadix,Guadix,Granada,50,37.3098723,-3.1454535
+Hospital de Alta Resolución de Loja,Loja,Granada,18,37.1709223,-4.1546013
+Hospital Vithas Granada,Granada,Granada,77,37.1646711,-3.572761
+Hospital Universitario Clínico San Cecilio,Granada,Granada,543,37.14643,-3.605211
+Hospital de Neurotraumatologia y Rehabilitación del H.U. Virgen de Las Nieves,Granada,Granada,241,37.2004464,-3.6135426
+Hospital Doctor Oloriz,Granada,Granada,50,37.1876231,-3.6053926
+Hospital Infanta Elena,Huelva,Huelva,304,37.2804759,-6.9125979
+Hospital Universitario Juan Ramon Jimenez,Huelva,Huelva,587,37.2840353,-6.9445635
+Hospital Vázquez Diaz,Huelva,Huelva,91,37.279478,-6.9211399
+Hospital de Riotinto,Minas de Riotinto,Huelva,118,37.6933561,-6.5978415
+Clínica Los Naranjos,Huelva,Huelva,34,37.2623838,-6.9494174
+Hospital Quironsalud Huelva,Huelva,Huelva,56,37.2669299,-6.9539031
+Hospital Virgen de La Bella,Lepe,Huelva,61,37.2604353,-7.1942073
+Hospital Universitario de Jaén,Jaén,Jaén,692,37.7742426,-3.7909893
+Hospital Neurotraumatologico del H.U. de Jaén,Jaén,Jaén,186,37.7957185,-3.7784707
+Hospital Doctor Sagaz,Jaén,Jaén,54,37.770606,-3.817912
+Hospital Materno-Infantil del H.U. de Jaén,Jaén,Jaén,122,37.7742426,-3.7909893
+Hospital San Agustín,Linares,Jaén,234,38.0886001,-3.6432519
+Hospital San Juan de La Cruz,Úbeda,Jaén,225,38.0194536,-3.3850601
+Clínica Cristo Rey,Jaén,Jaén,39,37.775632,-3.7888785
+Hospital Alto Guadalquivir,Andújar,Jaén,67,38.0402498,-4.0308205
+Hospital de Alta Resolución Sierra de Segura,Puente de Génave,Jaén,24,38.3600029,-2.7873148
+Hospital de Alta Resolución de Alcaudete,Alcaudete,Jaén,16,37.5871232,-4.0785805
+Hospital de Alta Resolución de Alcalá La Real,Alcalá la Real,Jaén,28,37.4542646,-3.9314383
+Hospital Puerta de Andalucía,Jaén,Jaén,79,37.7953136,-3.7773456
+Centro Hospitalario de Alta Resolución de Cazorla,Cazorla,Jaén,26,37.91548233452927,-3.0145182764303424
+Hospital Metropolitano de Jaén,Jaén,Jaén,35,37.7838844,-3.8273131
+Helicópteros Sanitarios Hospital,Marbella,Malaga,10,36.5488163302008,-4.952294769594818
+Hospital Costa del Sol,Marbella,Malaga,408,36.5070482,-4.8325686
+Hospital Universitario Regional de Málaga,Málaga,Malaga,523,36.72332836345261,-4.449884518813196
+Hospital Materno Infantil del H.U.R. de Málaga,Málaga,Malaga,349,36.72961645786691,-4.432333145795455
+Hospital Civil,Málaga,Malaga,201,36.7279003,-4.4329929
+Hospital Universitario Virgen de La Victoria,Málaga,Malaga,657,36.71851847334315,-4.478049803468426
+Hospital Marítimo de Torremolinos,Torremolinos,Malaga,89,36.6371378,-4.4874567
+Hospital de La Axarquia,Vélez-Málaga,Malaga,219,36.7513016,-4.0895803
+Hospital Vithas Parque San Antonio,Málaga,Malaga,100,36.7226782,-4.3972308
+HM El Pilar,Málaga,Malaga,24,36.7218829,-4.4041545
+HM Málaga,Málaga,Malaga,105,36.7218829,-4.4041545
+HM Gálvez,Málaga,Malaga,62,36.7209158,-4.4194103
+Hospital Internacional HM Santa Elena,Torremolinos,Malaga,90,36.64558530228776,-4.487755545799288
+Hospital El Ángel,Málaga,Malaga,138,36.7154666,-4.4532881
+Centro Asistencial Hnas. Hospitalarias del Sagrado Corazón de Jesús,Málaga,Malaga,321,36.733423,-4.4228669
+Clínica El Seranil,Vélez-Málaga,Malaga,60,36.7157623,-4.1990574
+Hospital de Antequera,Antequera,Malaga,159,37.0306174,-4.5282534
+Hospital Quironsalud Marbella,Marbella,Malaga,75,36.5085921,-4.8741895
+Centro Asistencial San Juan de Dios,Málaga,Malaga,398,36.759036,-4.4225494
+Hospital Psiquiátrico San Francisco de Asís,Málaga,Malaga,180,36.7292662,-4.368526
+Ha Marbella International Hospital,Marbella,Malaga,30,36.48505628564227,-4.970566803479056
+Hospital Ochoa,Marbella,Malaga,22,36.5073158,-4.8820386
+Clínicas del Sur Slu,Estepona,Malaga,74,36.45557264131646,-5.0849446723000415
+Hospital Vithas Xanit Internacional,Benalmádena,Malaga,125,36.594081,-4.5584739
+Fundacion Cudeca. Centro de Cuidados Paliativos,Benalmádena,Malaga,15,36.6071253,-4.5406668
+Hospital Quironsalud Málaga,Málaga,Malaga,160,36.6850227,-4.457199
+Hospital Vithas Xanit Estepona,Estepona,Malaga,10,36.4311476,-5.147768
+Hospital Recoletas Marbella Slu,Marbella,Malaga,22,36.5179742,-4.897906
+Hospital de La Serranía,Ronda,Malaga,150,36.7222521,-5.1470078
+Hospital Valle de Guadalhorce de Cartama,Málaga,Malaga,28,36.7218449,-4.6710606
+Hospital de Alta Resolución de Estepona,Estepona,Malaga,14,36.4114858,-5.1979213
+Hospital Quironsalud Sagrado Corazón,Sevilla,Sevilla,147,37.3594267,-5.9789764
+Fremap_Hospital y Centro de Rehabilitación de Sevilla,Sevilla,Sevilla,102,37.3332136,-5.9690176
+Hospital Fátima,Sevilla,Sevilla,73,37.3686476,-5.9880707
+Hospital Victoria Eugenia de La Cruz Roja Española,Sevilla,Sevilla,39,37.4019944,-5.9816579
+Clínica Santa Isabel,Sevilla,Sevilla,96,37.3868655,-5.9755266
+Hospital La Merced,Osuna,Sevilla,225,37.2323824,-5.0957416
+Hospital Universitario Virgen de Valme,Sevilla,Sevilla,617,37.3196659,-5.9712285
+Hospital El Tomillar,Alcalá de Guadaíra,Sevilla,80,37.2982135,-5.9008502
+Hospital Universitario Virgen Macarena,Sevilla,Sevilla,777,37.4067579,-5.98685
+Hospital San Lázaro,Sevilla,Sevilla,66,37.4144896,-5.9821448
+Hospital Universitario Virgen del Rocío,Sevilla,Sevilla,628,37.3629504,-5.9789302
+Hospital de Rehabilitación y Traumatología del H.U. Virgen del Rocío,Sevilla,Sevilla,295,37.3692358,-5.9854798
+Hospital Infantil,Sevilla,Sevilla,134,37.3626201,-5.977088
+Hospital San Juan de Dios de Sevilla,Sevilla,Sevilla,289,37.3813881,-5.9691621
+Clínica Nuestra Señora de Aránzazu,Sevilla,Sevilla,10,37.3969102,-5.9953361
+Hospital de Alta Resolución de Morón de La Frontera,Morón de la Frontera,Sevilla,12,37.11749627564362,-5.4540660169413435
+Hospital San Juan de Dios del Aljarafe,Bormujos,Sevilla,200,37.3733095,-6.083561
+Residencia de Salud Mental Nuestra Señora del Carmen,Bormujos,Sevilla,54,37.37878762985092,-6.070277218782967
+Ita Clinic Bcn,Sevilla,Sevilla,19,37.3892614,-5.9856082
+Hospital Quironsalud Infanta Luisa,Sevilla,Sevilla,139,37.3847186,-6.003822
+Hospital San Agustín,Dos Hermanas,Sevilla,93,37.2807132,-5.9359853
+Hospital Vithas Sevilla,Castilleja de la Cuesta,Sevilla,148,37.3893314,-6.0615703
+Hospital de Alta Resolución de Utrera,Utrera,Sevilla,14,37.1756949,-5.7852373
+Hospital Viamed Santa Angela de La Cruz,Sevilla,Sevilla,105,37.3332136,-5.9690176
+Hospital de Alta Resolución de Lebrija,Lebrija,Sevilla,22,36.9109946,-6.0717152
+Hospital Psiquiátrico Penitenciario,Sevilla,Sevilla,184,37.39056530803106,-5.847515618782412
+Clínica de Salud Mental Miguel de Mañara,Dos Hermanas,Sevilla,18,37.33478509987319,-5.9188808123814995
+Hospital de La Mujer,Sevilla,Sevilla,221,37.3631192,-5.9782126
+"Adinfa, Sociedad Cooperativa Andaluza",Coria del Río,Sevilla,25,37.2870216,-6.0564251
+Hospital de Emergencia Covid 19,Sevilla,Sevilla,276,37.3479759,-5.9749801
