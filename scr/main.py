@@ -28,17 +28,7 @@ D, q, C, city_ids, hosp_ids = ut.load_data(
 
 # Construir toolbox
 toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
-
-# --- Elige un algoritmo (descomenta uno) ---
-
-# 1) Sencillo y robusto
-# pop, hof, log = run_eaSimple(toolbox, ngen=300, mu_pop=250, cxpb=0.85, mutpb=0.15, hof_size=10)
-
-# 2) (μ + λ) elitista (recomendable para mantener calidad)
-#pop, hof, log = run_eaMuPlusLambda(toolbox,
-#                                   ngen=150, mu=150, lambda_=300,
-#                                   cxpb=0.85, mutpb=0.15, hof_size=10)
-
+# -----------------------------------------------------------
 # 3) (μ , λ) exploratorio
 pop, hof, log = alg.run_eaMuCommaLambda(toolbox,
                                    ngen=300, mu=150, lambda_=300,
@@ -66,5 +56,7 @@ ut.plot_evolution_threshold(df_stats, rute="runs/evolucion_fitness.png", thresho
 # === 2) DataFrame de hospitales seleccionados (nombre, localidad) ===
 df_sol = ut.solution_dataframe(best, hospitals_csv="data/processed/Hospitales_Con_Capacidad.csv",
                             name_col="nombre", locality_col="localidad")
+df_sol.to_csv("runs/solucion.csv", index=False)
+print("Solución guardada en: runs/solucion.csv")
 print("\n=== Hospitales seleccionados ===")
 print(df_sol)
