@@ -29,10 +29,10 @@ D, q, C, city_ids, hosp_ids = ut.load_data(
 # Construir toolbox
 toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
 # -----------------------------------------------------------
-# 3) (μ , λ) exploratorio
-pop, hof, log = alg.run_eaMuCommaLambda(toolbox,
-                                   ngen=300, mu=150, lambda_=300,
-                                   cxpb=0.8, mutpb=0.2, hof_size=1)
+
+pop, hof, log =  alg.run_aco_subset(toolbox, nH=D.shape[1], p=P,
+                                   ants=24, iters=60, alpha=1.0, beta=2.0,
+                                   rho=0.4, tau0=0.1, hof_size=1)
 # -----------------------------------------------------------
 # Resultados
 best = hof.items[0]

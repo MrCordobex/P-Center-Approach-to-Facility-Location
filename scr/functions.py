@@ -1,10 +1,10 @@
 import random
 import math
-from typing import List, Tuple, Dict
-
+from typing import List, Tuple, Dict,Iterable
+from copy import deepcopy
+from collections import deque
 import numpy as np
 import pandas as pd
-
 from deap import base, creator, tools, algorithms
 
 def make_random_individual(nH: int, p: int) -> List[int]:
@@ -187,3 +187,61 @@ def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed
     toolbox.register("mutate", mut_replace_gene, nH=H, p=p, indpb=0.2)
 
     return toolbox
+
+#----------------Funciones adicionales para métodos de literatura--------------------------
+def _ind_type(toolbox):
+    """Devuelve el tipo (clase) del individuo registrado en el toolbox."""
+    return type(toolbox.individual())
+
+
+def _mk_ind(toolbox, genes: Iterable[int]):
+    """Crea un individuo del tipo correcto, ordenado y sin repetidos."""
+    cls = _ind_type(toolbox)
+    lst = sorted(set(genes))
+    return cls(lst)
+
+
+def _evaluate(toolbox, ind):
+    """Evalúa y escribe ind.fitness.values, devolviendo float."""
+    f_tuple = toolbox.evaluate(ind)          # p.ej. (valor,)
+    f = float(f_tuple[0])
+    ind.fitness.values = (f,)                # <-- clave
+    return f
+
+
+def _neighbors_swaps(ind, nH: int, p: int, rng: random.Random, max_closed: int = None):
+    """
+    Genera vecinos por 'swap' 1-por-1:
+      - Elige una posición abierta y la sustituye por un índice cerrado.
+    Puedes limitar el nº de candidatos cerrados con max_closed para acelerar.
+    """
+    open_list = list(ind)
+    open_set = set(open_list)
+    closed = list(set(range(nH)) - open_set)
+    rng.shuffle(closed)
+    if max_closed is not None:
+        closed = closed[:max_closed]
+    for pos in range(p):
+        old = open_list[pos]
+        for new in closed:
+            if new != old:
+                child = list(open_list)
+                child[pos] = new
+                child.sort()
+                yield child
+
+
+def _init_logbook():
+    logbook = tools.Logbook()
+    logbook.header = ["gen", "nevals", "min", "avg", "max", "std"]
+    return logbook
+
+
+def _record_log(logbook, gen: int, fitness_values: List[float]):
+    arr = np.asarray(fitness_values, dtype=float)
+    m = float(np.min(arr))
+    M = float(np.max(arr))
+    avg = float(np.mean(arr))
+    std = float(np.std(arr)) if arr.size > 1 else 0.0
+    logbook.record(gen=gen, nevals=len(fitness_values), min=m, avg=avg, max=M, std=std)
+
