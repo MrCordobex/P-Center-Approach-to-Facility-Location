@@ -34,6 +34,7 @@ pop, hof, log =  alg.run_aco_subset(toolbox, nH=D.shape[1], p=P,
                                    ants=24, iters=60, alpha=1.0, beta=2.0,
                                    rho=0.4, tau0=0.1, hof_size=1)
 # -----------------------------------------------------------
+#=== Resultados finales ===
 # Resultados
 best = hof.items[0]
 print("\n=== MEJOR SOLUCIÓN ===")
