@@ -10,11 +10,11 @@ ut.capacities_demand(
     ruta_hospitales="data/processed/Hospitales_Completo.csv",
     ruta_destino_ciudades="data/processed/Ciudades_Con_Demanda.csv",
     ruta_destino_hospitales="data/processed/Hospitales_Con_Capacidad.csv",
-    H=30, LOS=5, occ=0.9, rho=0.001
+    H=30, LOS=5, occ=0.9, rho=0.005
 )
 # -----------------------------------------------------------
 # Parámetros del problema
-P = 10  # número de hospitales a abrir (ajústalo)
+P = 25  # número de hospitales a abrir (ajústalo)
 SEED = 123
 
 # Cargar datos
@@ -30,9 +30,7 @@ D, q, C, city_ids, hosp_ids = ut.load_data(
 toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
 # -----------------------------------------------------------
 
-pop, hof, log =  alg.run_aco_subset(toolbox, nH=D.shape[1], p=P,
-                                   ants=24, iters=60, alpha=1.0, beta=2.0,
-                                   rho=0.4, tau0=0.1, hof_size=1)
+pop, hof, log =  alg.run_eaMuCommaLambda(toolbox, ngen=300, mu=100, lambda_=200, cxpb=0.85, mutpb=0.15, hof_size=3, verbose=True)
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados
@@ -46,7 +44,15 @@ print(f"Fitness (Z + penalización): {best_fit:.4f}")
 assign, Z, cap_left, penalty_unserved, num_unserved = fn.greedy_assignment_with_capacities(D, q, C, best)
 print(f"Z (máx. tiempo): {Z:.4f} min")
 print(f"Demanda no atendida: {penalty_unserved:.2f} (ciudades sin asignar: {num_unserved})")
-
+# Mapa
+_ = ut.create_map_solution(
+    D=D, q=q, C=C, open_idx=list(best),
+    cities_csv="data/processed/Ciudades_Con_Demanda.csv",
+    hospitals_csv="data/processed/Hospitales_Con_Capacidad.csv",
+    out_html="runs/solucion_map.html",
+    draw_lines=True  # pon True si quieres líneas ciudad→hospital
+)
+print("Mapa guardado en: runs/solucion_map.html")
 # === 1) Estadísticas y gráfica de evolución ===
 df_stats = ut.logbook_to_dataframe(log)
 df_stats.to_csv("runs/evolucion_fitness.csv", index=False)

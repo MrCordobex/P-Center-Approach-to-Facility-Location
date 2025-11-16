@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from typing import List, Tuple, Dict
 import folium
+from scr.functions import greedy_assignment_with_capacities
 
 def logbook_to_dataframe(log) -> pd.DataFrame:
     """Convierte el logbook de DEAP a DataFrame con columnas gen, min, avg, max, std (si existen)."""
@@ -198,3 +199,196 @@ def capacities_demand(ruta_ciudades: str = "../data/processed/andaluces_2_5k.csv
     # Guardar para tu GA
     ciudades.to_csv(ruta_destino_ciudades, index=False)
     hospitales.to_csv(ruta_destino_hospitales, index=False)
+
+
+import folium
+import pandas as pd
+import numpy as np
+from typing import List, Dict, Tuple, Optional
+
+def _hex_color_hsv(i: int, n: int) -> str:
+    """
+    Genera n colores bien espaciados en HSV y devuelve el i-ésimo en HEX.
+    Evita colores demasiado claros/oscuro.
+    """
+    h = (i / max(n, 1)) % 1.0
+    s = 0.75
+    v = 0.95
+    # HSV -> RGB
+    import colorsys
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return '#%02x%02x%02x' % (int(r*255), int(g*255), int(b*255))
+
+def create_map_solution(
+    D: np.ndarray,
+    q: np.ndarray,
+    C: np.ndarray,
+    open_idx: List[int],
+    cities_csv: str = "data/processed/Ciudades_Con_Demanda.csv",
+    hospitals_csv: str = "data/processed/Hospitales_Con_Capacidad.csv",
+    out_html: str = "runs/solucion_map.html",
+    draw_lines: bool = False,
+    line_opacity: float = 0.45,
+    city_radius: int = 4,
+    selected_hosp_radius: int = 8,
+) -> folium.Map:
+    """
+    Dibuja:
+      - SOLO hospitales seleccionados (open_idx) en negro.
+      - Ciudades coloreadas por el hospital seleccionado al que fueron asignadas.
+      - Ciudades no asignadas (si hubiera) en gris.
+    """
+    # Cargar datos
+    datos = pd.read_csv(cities_csv).copy()
+    hospitales = pd.read_csv(hospitals_csv).copy()
+
+    for df in (datos, hospitales):
+        df['latitud'] = pd.to_numeric(df['latitud'], errors='coerce')
+        df['longitud'] = pd.to_numeric(df['longitud'], errors='coerce')
+
+    center_lat = float(datos['latitud'].mean())
+    center_lon = float(datos['longitud'].mean())
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
+
+    # Asignación greedy (tu función)
+    assign_of_city, Z, cap_left, penalty_unserved, num_unserved = greedy_assignment_with_capacities(
+        D, q, C, open_idx
+    )
+
+    # Colores por hospital abierto (para pintar ciudades)
+    open_idx_sorted = sorted(open_idx)
+    color_by_hosp: Dict[int, str] = {
+        h: _hex_color_hsv(k, len(open_idx_sorted)) for k, h in enumerate(open_idx_sorted)
+    }
+
+    # Carga utilizada por hospital + lista de ciudades por hospital
+    V, H = D.shape
+    load_used = np.zeros(H, dtype=float)
+    cities_per_h = {h: [] for h in open_idx_sorted}
+    for i in range(V):
+        h = int(assign_of_city[i])
+        if h >= 0:
+            load_used[h] += float(q[i])
+            if h in cities_per_h:
+                cities_per_h[h].append(i)
+
+    # === Hospitales seleccionados en negro ===
+    for h in open_idx_sorted:
+        if h >= len(hospitales):  # por seguridad
+            continue
+        lat = hospitales.loc[h, 'latitud']
+        lon = hospitales.loc[h, 'longitud']
+        if pd.isna(lat) or pd.isna(lon):
+            continue
+        name = hospitales.loc[h, 'nombre'] if 'nombre' in hospitales.columns else f'Hospital {h}'
+        loc = hospitales.loc[h, 'localidad'] if 'localidad' in hospitales.columns else ''
+        prov = hospitales.loc[h, 'provincia'] if 'provincia' in hospitales.columns else ''
+        used = load_used[h]
+        cap = float(C[h])
+        left = cap_left.get(h, cap - used)
+
+        popup_text = (
+            f"<b>{name}</b><br>"
+            f"Localidad: {loc}<br>"
+            f"Provincia: {prov}<br>"
+            f"Asig. ciudades: {len(cities_per_h.get(h, []))}<br>"
+            f"Carga usada: {used:,.0f}<br>"
+            f"Cap. restante: {left:,.0f}<br>"
+            f"Cap. total (H): {cap:,.0f}"
+        )
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=selected_hosp_radius,
+            popup=folium.Popup(popup_text, max_width=300),
+            color='black',
+            fill=True,
+            fill_color='black',
+            fill_opacity=1.0,
+            weight=2
+        ).add_to(m)
+
+    # === Ciudades (color según hospital asignado) ===
+    for i in range(V):
+        if i >= len(datos):
+            continue
+        lat = datos.loc[i, 'latitud']
+        lon = datos.loc[i, 'longitud']
+        if pd.isna(lat) or pd.isna(lon):
+            continue
+
+        muni = datos.get('municipio', pd.Series([f'Ciudad {i}']*len(datos))).iloc[i]
+        prov = datos.get('PROVINCIA', pd.Series(['']*len(datos))).iloc[i]
+        popu = datos.get('poblacion', pd.Series([np.nan]*len(datos))).iloc[i]
+
+        h = int(assign_of_city[i])
+        if h >= 0:
+            color = color_by_hosp.get(h, '#555555')
+            popup_text = (
+                f"<b>{muni}</b><br>"
+                f"Provincia: {prov}<br>"
+                f"Población: {int(popu) if pd.notna(popu) else '-'}<br>"
+                f"Asignado a: {hospitales.loc[h, 'nombre'] if 'nombre' in hospitales.columns else h}"
+            )
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=city_radius,
+                popup=folium.Popup(popup_text, max_width=260),
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.75
+            ).add_to(m)
+
+            if draw_lines:
+                h_lat = hospitales.loc[h, 'latitud']
+                h_lon = hospitales.loc[h, 'longitud']
+                if pd.notna(h_lat) and pd.notna(h_lon):
+                    folium.PolyLine(
+                        locations=[(lat, lon), (h_lat, h_lon)],
+                        color=color, weight=1.5, opacity=line_opacity
+                    ).add_to(m)
+        else:
+            # No asignada (gris)
+            popup_text = (
+                f"<b>{muni}</b><br>"
+                f"Provincia: {prov}<br>"
+                f"Población: {int(popu) if pd.notna(popu) else '-'}<br>"
+                f"<b>NO ASIGNADA</b>"
+            )
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=city_radius+1,
+                popup=folium.Popup(popup_text, max_width=260),
+                color='gray',
+                fill=True,
+                fill_color='gray',
+                fill_opacity=0.5
+            ).add_to(m)
+
+    # === Leyenda (hospital abierto ↔ color de sus ciudades) ===
+    legend_items = []
+    for h in open_idx_sorted:
+        color = color_by_hosp[h]
+        name = hospitales.loc[h, 'nombre'] if 'nombre' in hospitales.columns else f'Hospital {h}'
+        legend_items.append(f'<li><span style="background:{color};"></span>{name}</li>')
+    legend_html = f"""
+    <div style="
+        position: fixed; bottom: 20px; left: 20px; z-index: 9999;
+        background: white; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2); font-size: 12px; max-height: 300px; overflow:auto;">
+      <div style="font-weight:600; margin-bottom:6px;">Hospital ↔ color de sus ciudades</div>
+      <ul style="list-style:none; margin:0; padding:0;">
+        {''.join(legend_items)}
+      </ul>
+      <style>
+        ul > li {{ margin: 4px 0; display:flex; align-items:center; gap:8px; }}
+        ul > li > span {{
+            display:inline-block; width:14px; height:14px; border-radius:3px; border:1px solid #888;
+        }}
+      </style>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legend_html))
+
+    m.save(out_html)
+    return m
