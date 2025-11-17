@@ -486,4 +486,3 @@ def run_aco_subset(toolbox,
     pop = [best]
     return pop, hof, log
 
-

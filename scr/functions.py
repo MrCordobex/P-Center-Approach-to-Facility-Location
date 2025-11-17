@@ -1,11 +1,12 @@
 import random
 import math
-from typing import List, Tuple, Dict,Iterable
+from typing import List, Tuple, Dict,Iterable, Optional
 from copy import deepcopy
 from collections import deque
 import numpy as np
 import pandas as pd
 from deap import base, creator, tools, algorithms
+import utils.utils as ut
 
 def make_random_individual(nH: int, p: int) -> List[int]:
     """ Devuelve una lista ordenada de índices de hospitales abiertos de tamaño p (sin repetición). """
@@ -133,6 +134,164 @@ def greedy_assignment_with_capacities(
 
     return assign_of_city, Z, cap_left, penalty_unserved, num_unserved
 
+import numpy as np
+from typing import List, Tuple, Dict, Optional
+
+def greedy2_assignment_with_capacities(
+    D: np.ndarray,
+    q: np.ndarray,
+    C: np.ndarray,
+    open_idx: List[int],
+    k: int = 6,
+    city_home: Optional[np.ndarray] = None,   # se ignora; se infiere el "home" con D==0
+    stickiness: bool = True,                  # se ignora
+    order: str = "demand_desc",               # se usa demanda descendente
+    early_stop_Z: Optional[float] = None,
+    eps: float = 1e-12,
+) -> Tuple[np.ndarray, float, Dict[int, float], float, int]:
+    """
+    Greedy FRACCIONAL en 2 fases (misma firma / salidas que tu función original):
+
+      Fase 1 (prioridad local):
+        - Identifica ciudades con hospital propio ABIERTO (usando D[i,j]≈0).
+        - Atiende esas ciudades en su hospital local, empezando por q desc, fraccionando si hace falta.
+
+      Fase 2 (resto):
+        - Atiende todas las ciudades (remanentes incluidos) por q desc,
+          repartiendo fraccionalmente entre los k hospitales abiertos más cercanos.
+
+    Devuelve:
+      - assign_of_city: hospital global con MAYOR flujo recibido desde la ciudad (o -1 si sin atender)
+      - Z: máximo D[i,j] entre pares con flujo > 0
+      - cap_left: {j_global: capacidad restante} sólo para abiertos
+      - penalty_unserved: suma de demanda sin atender
+      - num_unserved: nº de ciudades con remanente > 0
+    """
+    V, H = D.shape
+    if not open_idx:
+        assign = -np.ones(V, dtype=int)
+        return assign, 0.0, {}, float(np.sum(q)), int(np.sum(q > 0))
+
+    # Asegurar arrays
+    q = np.asarray(q, dtype=float)
+    C = np.asarray(C, dtype=float)
+    D = np.asarray(D, dtype=float)
+
+    # Hospitales abiertos compactados 0..m-1
+    open_arr = np.array(sorted(set(open_idx)), dtype=int)
+    m = open_arr.size
+    cap_left_open = C[open_arr].astype(float).copy()
+
+    # Submatriz distancias a abiertos
+    D_sub = D[:, open_arr]  # (V, m)
+
+    # Preselección de k vecinos más cercanos (vectorizado)
+    K = min(k, m)
+    # Para fase 2
+    idx_k = np.argpartition(D_sub, K-1, axis=1)[:, :K]           # (V, K)
+    take_vals = np.take_along_axis(D_sub, idx_k, axis=1)
+    ord_within = np.argsort(take_vals, axis=1)
+    cand_pos = np.take_along_axis(idx_k, ord_within, axis=1)     # (V, K) en 0..m-1
+
+    # Detectar hospital local (home) por D≈0 hacia un abierto
+    # Si hay varios con ~0, se coge el primero
+    self_tol = 1e-9
+    is_self = np.isclose(D_sub, 0.0, atol=self_tol)              # (V, m)
+    home_pos = np.full(V, -1, dtype=int)
+    rows_with_any = np.any(is_self, axis=1)
+    if np.any(rows_with_any):
+        # tomar el primer True por fila
+        first_true = np.argmax(is_self[rows_with_any], axis=1)
+        home_pos[rows_with_any] = first_true
+
+    # Orden de ciudades por demanda descendente (para ambas fases)
+    city_order = np.argsort(-q)
+
+    # Salidas
+    best_h_pos = -np.ones(V, dtype=int)   # 0..m-1 (abiertos)
+    best_flow  = np.zeros(V, dtype=float)
+    Z = 0.0
+    rem_city = q.copy()
+
+    # ===== FASE 1: servir ciudades con hospital local abierto, q-desc =====
+    cities_with_home = np.where(home_pos >= 0)[0]
+    if cities_with_home.size > 0:
+        order1 = cities_with_home[np.argsort(-q[cities_with_home])]
+        for i in order1:
+            rem = rem_city[i]
+            if rem <= eps:
+                continue
+            hp = int(home_pos[i])       # pos compacta en open_arr
+            cap = cap_left_open[hp]
+            if cap <= eps:
+                continue
+
+            take = rem if rem <= cap else cap
+            rem_city[i] = rem - take
+            cap_left_open[hp] = cap - take
+
+            if take > best_flow[i]:
+                best_flow[i]  = take
+                best_h_pos[i] = hp
+
+            dij = float(D_sub[i, hp])
+            if dij > Z:
+                Z = dij
+                if (early_stop_Z is not None) and (Z >= early_stop_Z):
+                    # terminar temprano si interesa
+                    penalty_unserved = float(np.sum(rem_city))
+                    num_unserved = int(np.sum(rem_city > eps))
+                    assign = np.where(best_h_pos >= 0, open_arr[best_h_pos], -1).astype(int)
+                    cap_left = {int(open_arr[j]): float(cap_left_open[j]) for j in range(m)}
+                    return assign, Z, cap_left, penalty_unserved, num_unserved
+
+    # ===== FASE 2: servir remanente de todas las ciudades, q-desc =====
+    order2 = np.argsort(-rem_city)  # por remanente
+    for i in order2:
+        rem = rem_city[i]
+        if rem <= eps:
+            continue
+
+        # candidatos k por cercanía (incluye home si aún tiene capacidad)
+        row_cand = cand_pos[i]  # (K,)
+        # Recorrer candidatos en orden de distancia ascendente
+        for jj in row_cand:
+            cap = cap_left_open[int(jj)]
+            if cap <= eps:
+                continue
+
+            take = rem if rem <= cap else cap
+            rem -= take
+            cap_left_open[int(jj)] = cap - take
+
+            if take > best_flow[i]:
+                best_flow[i]  = take
+                best_h_pos[i] = int(jj)
+
+            dij = float(D_sub[i, int(jj)])
+            if dij > Z:
+                Z = dij
+                if (early_stop_Z is not None) and (Z >= early_stop_Z):
+                    rem_city[i] = rem
+                    penalty_unserved = float(np.sum(rem_city))
+                    num_unserved = int(np.sum(rem_city > eps))
+                    assign = np.where(best_h_pos >= 0, open_arr[best_h_pos], -1).astype(int)
+                    cap_left = {int(open_arr[j]): float(cap_left_open[j]) for j in range(m)}
+                    return assign, Z, cap_left, penalty_unserved, num_unserved
+
+            if rem <= eps:
+                break
+
+        rem_city[i] = rem  # actualizar el remanente de la ciudad
+
+    # Ensamblar salidas
+    assign = np.where(best_h_pos >= 0, open_arr[best_h_pos], -1).astype(int)
+    cap_left = {int(open_arr[j]): float(cap_left_open[j]) for j in range(m)}
+    penalty_unserved = float(np.sum(rem_city))
+    num_unserved = int(np.sum(rem_city > eps))
+    return assign, float(Z), cap_left, penalty_unserved, num_unserved
+
+
 def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: float = 1e6, unserved_penalty: float = 1.0):
     """
     Crea una función fitness que:
@@ -152,7 +311,7 @@ def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: 
         if len(set(individual)) != p:
             return (bigM,)  # duplicados -> inválido
 
-        assign, Z, cap_left, penalty_unserved, num_unserved = greedy_assignment_with_capacities(D, q, C, individual)
+        assign, Z, cap_left, penalty_unserved, num_unserved = greedy2_assignment_with_capacities(D, q, C, individual)
         # Penalización por demanda no atendida (puedes multiplicar por un factor grande)
         penalty = unserved_penalty * penalty_unserved
         return (Z + penalty,)

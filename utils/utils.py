@@ -237,6 +237,7 @@ def create_map_solution(
       - SOLO hospitales seleccionados (open_idx) en negro.
       - Ciudades coloreadas por el hospital seleccionado al que fueron asignadas.
       - Ciudades no asignadas (si hubiera) en gris.
+      - Leyenda: 'Nombre del hospital (Localidad)'.
     """
     # Cargar datos
     datos = pd.read_csv(cities_csv).copy()
@@ -345,7 +346,7 @@ def create_map_solution(
                 if pd.notna(h_lat) and pd.notna(h_lon):
                     folium.PolyLine(
                         locations=[(lat, lon), (h_lat, h_lon)],
-                        color=color, weight=1.5, opacity=line_opacity
+                        color=color, weight=1.5, opacity=0.45
                     ).add_to(m)
         else:
             # No asignada (gris)
@@ -370,7 +371,9 @@ def create_map_solution(
     for h in open_idx_sorted:
         color = color_by_hosp[h]
         name = hospitales.loc[h, 'nombre'] if 'nombre' in hospitales.columns else f'Hospital {h}'
-        legend_items.append(f'<li><span style="background:{color};"></span>{name}</li>')
+        loc = hospitales.loc[h, 'localidad'] if 'localidad' in hospitales.columns else ''
+        label = f"{name} ({loc})" if (isinstance(loc, str) and len(loc.strip()) > 0) else f"{name}"
+        legend_items.append(f'<li><span style="background:{color};"></span>{label}</li>')
     legend_html = f"""
     <div style="
         position: fixed; bottom: 20px; left: 20px; z-index: 9999;

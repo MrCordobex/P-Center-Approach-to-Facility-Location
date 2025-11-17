@@ -10,12 +10,12 @@ ut.capacities_demand(
     ruta_hospitales="data/processed/Hospitales_Completo.csv",
     ruta_destino_ciudades="data/processed/Ciudades_Con_Demanda.csv",
     ruta_destino_hospitales="data/processed/Hospitales_Con_Capacidad.csv",
-    H=30, LOS=5, occ=0.9, rho=0.005
+    H=30, LOS=5, occ=0.9, rho=0.001
 )
 # -----------------------------------------------------------
 # Parámetros del problema
-P = 25  # número de hospitales a abrir (ajústalo)
-SEED = 123
+P = 10  # número de hospitales a abrir (ajústalo)
+SEED = 100
 
 # Cargar datos
 D, q, C, city_ids, hosp_ids = ut.load_data(
@@ -28,9 +28,10 @@ D, q, C, city_ids, hosp_ids = ut.load_data(
 
 # Construir toolbox
 toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
+
 # -----------------------------------------------------------
 
-pop, hof, log =  alg.run_eaMuCommaLambda(toolbox, ngen=300, mu=100, lambda_=200, cxpb=0.85, mutpb=0.15, hof_size=3, verbose=True)
+pop, hof, log =  alg.run_eaMuPlusLambda(toolbox, ngen=200, mu=100, lambda_=200, cxpb=0.8, mutpb=0.2, hof_size=3, verbose=True)
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados
