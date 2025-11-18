@@ -312,9 +312,29 @@ def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: 
             return (bigM,)  # duplicados -> inválido
 
         assign, Z, cap_left, penalty_unserved, num_unserved = greedy2_assignment_with_capacities(D, q, C, individual)
-        # Penalización por demanda no atendida (puedes multiplicar por un factor grande)
-        penalty = unserved_penalty * penalty_unserved
-        return (Z + penalty,)
+        # === NUEVO: penalización suave por ocupación media ===
+        # Calculamos u_j = uso_j / C_j para cada hospital ABIERTO (0..1),
+        # y usamos la media en % para seguir tu ejemplo (75%, 50%, ...).
+        u_list = []
+        for j in individual:                     # hospitales abiertos en este individuo
+            Cj = float(C[j])
+            if Cj <= 0:
+                continue
+            cap_rem = float(cap_left.get(j, Cj))  # si no está, asumimos que no se usó capacidad
+            used = max(0.0, Cj - cap_rem)
+            u = used / Cj                         # ocupación en [0,1]
+            u_list.append(u)
+
+        mean_occ_pct = 100.0 * (sum(u_list) / len(u_list)) if u_list else 0.0  # media en %
+        tau = 0.001   # <-- escalar MUY pequeño (ej.: "minutos" por punto porcentual)
+        pen_occ = tau * mean_occ_pct
+
+        # Penalización original por no atendidos (igual que tenías)
+        penalty_unserved_term = unserved_penalty * penalty_unserved
+
+        # Fitness final (misma salida: tupla de un float)
+        F = Z + penalty_unserved_term + pen_occ
+        return (F,)
 
     return fitness
 

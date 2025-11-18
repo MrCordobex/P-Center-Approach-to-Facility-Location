@@ -14,7 +14,7 @@ ut.capacities_demand(
 )
 # -----------------------------------------------------------
 # Parámetros del problema
-P = 10  # número de hospitales a abrir (ajústalo)
+P = 15  # número de hospitales a abrir (ajústalo)
 SEED = 100
 
 # Cargar datos
