@@ -312,22 +312,39 @@ def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: 
             return (bigM,)  # duplicados -> inválido
 
         assign, Z, cap_left, penalty_unserved, num_unserved = greedy2_assignment_with_capacities(D, q, C, individual)
-        # === NUEVO: penalización suave por ocupación media ===
-        # Calculamos u_j = uso_j / C_j para cada hospital ABIERTO (0..1),
-        # y usamos la media en % para seguir tu ejemplo (75%, 50%, ...).
-        u_list = []
-        for j in individual:                     # hospitales abiertos en este individuo
+        # === NUEVO: penalización suave por "1 - entropía" de la ocupación ===
+        # u_j = uso_j / C_j en [0,1];  φ(u) = 1 - H(u)/log(2), donde H(u) = -(u ln u + (1-u) ln(1-u))
+        # φ(u) vale 0 en u=0.5 y 1 en u→0 o u→1. Promediaremos φ(u) y la ponderamos MUY poco.
+
+        eps = 1e-12  # para evitar log(0)
+        phis = []
+        for j in individual:                      # hospitales abiertos en este individuo
             Cj = float(C[j])
             if Cj <= 0:
                 continue
-            cap_rem = float(cap_left.get(j, Cj))  # si no está, asumimos que no se usó capacidad
+            cap_rem = float(cap_left.get(j, Cj))  # si no está, asumimos no usado
             used = max(0.0, Cj - cap_rem)
             u = used / Cj                         # ocupación en [0,1]
-            u_list.append(u)
 
-        mean_occ_pct = 100.0 * (sum(u_list) / len(u_list)) if u_list else 0.0  # media en %
-        tau = 0.001   # <-- escalar MUY pequeño (ej.: "minutos" por punto porcentual)
-        pen_occ = tau * mean_occ_pct
+            # clamp suave para estabilidad numérica
+            u = min(max(u, eps), 1.0 - eps)
+
+            # entropía binaria y φ = 1 - H/ln 2
+            H = -(u * math.log(u) + (1.0 - u) * math.log(1.0 - u))
+            phi = 1.0 - (H / math.log(2.0))
+            phis.append(phi)
+
+        # Agregación: media simple (si prefieres ponderar por capacidad, ver comentario abajo)
+        mean_phi = (sum(phis) / len(phis)) if phis else 0.0
+
+        # Peso MUY pequeño para que solo actúe en empates (ajusta si hace falta)
+        alpha_phi = 1e-3     # ~ "minutos" por unidad de φ en [0,1]
+        pen_occ = alpha_phi * mean_phi
+
+        # (Opcional, si quisieras ponderar por capacidad, sustituye las 3 líneas anteriores por):
+        # Cs = [float(C[j]) for j in individual if float(C[j]) > 0]
+        # w = [c / sum(Cs) for c in Cs] if Cs else []
+        # pen_occ = alpha_phi * sum(wi * ph for wi, ph in zip(w, phis)) if w else 0.0
 
         # Penalización original por no atendidos (igual que tenías)
         penalty_unserved_term = unserved_penalty * penalty_unserved
