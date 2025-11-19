@@ -293,102 +293,94 @@ def greedy2_assignment_with_capacities(
 
 
 # Crossover con conjuntos (intersección + diferencia)
-def crossover_set_based(ind1, ind2, H, p, rng=random):
+def crossover_set_based(ind1, ind2, nH: int, p: int):
     """
-    Operador DEAP:
-    - Toma ind1 e ind2 (lists de longitud p, sin duplicados)
-    - Aplica tu crossover de conjuntos
-    - Sobrescribe ind1[:] y ind2[:] con los nuevos hijos
-    - Devuelve (ind1, ind2)
+    NUEVO crossover_set_based, usando la misma lógica que cx_set_based:
+      - Trabaja con subconjuntos (listas de índices de hospitales).
+      - Evita duplicados y mantiene tamaño p.
+      - Sobrescribe ind1 e ind2 in-place y los devuelve.
     """
+    parent1 = list(ind1)
+    parent2 = list(ind2)
 
-    set1, set2 = set(ind1), set(ind2)
-    common = list(set1 & set2)
-    diff   = list((set1 | set2) - (set1 & set2))
+    set1, set2 = set(parent1), set(parent2)
+    common = list(set1.intersection(set2))
+    only1 = list(set1 - set2)
+    only2 = list(set2 - set1)
 
-    rng.shuffle(common)
-    rng.shuffle(diff)
+    # Hijo 1
+    child1 = common.copy()
+    random.shuffle(only1)
+    random.shuffle(only2)
+    pool1 = common + only1 + only2
+    for g in pool1:
+        if g not in child1:
+            child1.append(g)
+        if len(child1) == p:
+            break
 
-    # ===== Hijo 1 =====
-    child1 = []
-    for h in common:
-        if len(child1) < p:
-            child1.append(h)
-    for h in diff:
-        if len(child1) < p and h not in child1:
-            child1.append(h)
-    if len(child1) < p:
-        remaining = list(set(range(H)) - set(child1))
-        rng.shuffle(remaining)
-        child1 += remaining[:p - len(child1)]
+    # Hijo 2
+    child2 = common.copy()
+    pool2 = common + only2 + only1
+    for g in pool2:
+        if g not in child2:
+            child2.append(g)
+        if len(child2) == p:
+            break
 
-    # ===== Hijo 2 =====
-    child2 = []
-    for h in diff:
-        if len(child2) < p:
-            child2.append(h)
-    for h in common:
-        if len(child2) < p and h not in child2:
-            child2.append(h)
-    if len(child2) < p:
-        remaining = list(set(range(H)) - set(child2))
-        rng.shuffle(remaining)
-        child2 += remaining[:p - len(child2)]
+    child1.sort()
+    child2.sort()
 
-    # === IMPORTANTÍSIMO: volcar en ind1 e ind2 ===
+    # Sobrescribimos los individuos DEAP in-place
     ind1[:] = child1
     ind2[:] = child2
 
     return ind1, ind2
 
 # Mutacion 1-swap simple
-def mutation_1swap(individual, H, rng=random):
+def mutation_1swap(individual: List[int], nH: int, p: int, indpb: float = 0.2) -> Tuple[List[int]]:
     """
-    Operador DEAP:
-    - Hace un 1-swap: quita un hospital y añade otro que no esté
-    - Modifica el individuo in-place
-    - Devuelve (individual,)
+    NUEVA mutation_1swap:
+      - Misma lógica que mut_replace_gene.
+      - Recorre cada posición y con prob indpb hace un 'swap' por un hospital libre.
+      - Mantiene tamaño p y unicidad.
     """
+    current = set(individual)
+    all_idx = set(range(nH))
+    free = list(all_idx - current)
 
-    p = len(individual)
-    if p == 0:
-        return individual,
+    for pos in range(p):
+        if random.random() < indpb and free:
+            new_gene = random.choice(free)
+            free.remove(new_gene)
+            free.append(individual[pos])
+            individual[pos] = new_gene
 
-    pos_remove = rng.randrange(p)
-    current_set = set(individual)
-
-    candidates_out = list(set(range(H)) - current_set)
-    if candidates_out:
-        h_add = rng.choice(candidates_out)
-        individual[pos_remove] = h_add
-
-    return individual,
+    individual.sort()
+    return (individual,)
 
 # Búsqueda local (hill-climbing con 1-swap)
-def local_search_1swap(
-    individual,
-    evaluate,
-    nH,
-    max_iterations=20,
-    neighbors_per_iteration=10,
-    rng=random,
-):
+
+def local_search_1swap_ind(individual, toolbox, nH,
+                           max_iterations=10,
+                           neighbors_per_iteration=5,
+                           rng=random):
     """
-    Búsqueda local hill-climbing sobre un individuo DEAP.
-    Movimiento: 1-swap (como tu mutación).
-    Usa 'evaluate' (toolbox.evaluate) y minimiza.
+    Búsqueda local sencilla tipo hill-climbing usando movimientos 1-swap.
+    Trabaja SOBRE un individuo DEAP.
     """
+    # lo tratamos como lista normal
     current = list(individual)
     p = len(current)
 
-    current_f = evaluate(current)[0]
+    # fitness actual usando el toolbox
+    current_f = toolbox.evaluate(current)[0]
 
     for _ in range(max_iterations):
         improved = False
 
         for _ in range(neighbors_per_iteration):
             pos_remove = rng.randrange(p)
-
             current_set = set(current)
             candidates_out = list(set(range(nH)) - current_set)
             if not candidates_out:
@@ -398,8 +390,7 @@ def local_search_1swap(
 
             neighbor = list(current)
             neighbor[pos_remove] = h_add
-
-            neighbor_f = evaluate(neighbor)[0]
+            neighbor_f = toolbox.evaluate(neighbor)[0]
 
             if neighbor_f < current_f:
                 current = neighbor
@@ -410,6 +401,7 @@ def local_search_1swap(
         if not improved:
             break
 
+    # volcamos en el individuo DEAP
     individual[:] = current
     individual.fitness.values = (current_f,)
     return individual

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from collections import deque
 from deap import base, creator, tools, algorithms
-from scr.functions import _mk_ind, _evaluate, _init_logbook, _record_log, _neighbors_swaps
+from scr.functions import _mk_ind, _evaluate, _init_logbook, _record_log, _neighbors_swaps, local_search_1swap_ind
 
 
 def run_eaSimple(toolbox, ngen=200, mu_pop=200, cxpb=0.8, mutpb=0.2, hof_size=5, verbose=True):
@@ -489,90 +489,98 @@ def run_aco_subset(toolbox,
 # =========================
 # 7) GA memético
 # =========================
-def run_memetic_ga(
-    toolbox,
-    D,
-    pop_size=100,
-    ngen=100,
-    cxpb=0.9,
-    mutpb=0.2,
-    memetic_interval=5,
-    memetic_best_k=5,
-):
+def run_memetic_ga(toolbox,
+                   D,
+                   pop_size: int = 100,
+                   ngen: int = 100,
+                   cxpb: float = 0.9,
+                   mutpb: float = 0.2,
+                   memetic_interval: int = 5,
+                   memetic_best_k: int = 5,
+                   hof_size: int = 1,
+                   seed: int = 0,
+                   verbose: bool = True):
     """
-    Ejecuta un GA memético:
-      - Selección torneo
-      - Cruce: crossover_set_based
-      - Mutación: mutation_1swap
-      - Fitness: fitness_function_factory (ya registrado en toolbox)
-      - Búsqueda local: local_search_1swap cada 'memetic_interval' generaciones
+    GA memético para tu p-center capacitado.
+
+    Devuelve:
+      - pop: población final
+      - hof: Hall of Fame (mejores individuos)
+      - log: logbook con (gen, min, avg, max)
     """
+    rng = random.Random(seed)
     V, nH = D.shape
 
-    # 1) Población inicial
+    log = _init_logbook()
+    hof = tools.HallOfFame(hof_size)
+
+    # === Población inicial
     pop = toolbox.population(n=pop_size)
 
-    # 2) Evaluación inicial
+    # Evaluar población inicial
     for ind in pop:
         ind.fitness.values = toolbox.evaluate(ind)
 
-    history = []
+    hof.update(pop)
+    fits = [ind.fitness.values[0] for ind in pop]
+    _record_log(log, gen=0, fitness_values=fits)
 
+    if verbose:
+        print(f"[GA] gen=0 min={min(fits):.6f} avg={sum(fits)/len(fits):.6f} max={max(fits):.6f}")
+
+    # === Bucle evolutivo
     for gen in range(1, ngen + 1):
-        # --- Selección ---
+        # Selección -> como haces en otros algoritmos
         offspring = toolbox.select(pop, len(pop))
-        offspring = list(map(tools.clone, offspring))
+        # Clonado (usamos deepcopy, no tools.clone)
+        offspring = [deepcopy(ind) for ind in offspring]
 
-        # --- Crossover ---
+        # Crossover
         for i in range(0, len(offspring), 2):
             if i + 1 >= len(offspring):
                 break
             if random.random() < cxpb:
-                toolbox.mate(offspring[i], offspring[i + 1])
+                offspring[i], offspring[i+1] = toolbox.mate(offspring[i], offspring[i+1])
                 del offspring[i].fitness.values
-                del offspring[i + 1].fitness.values
+                del offspring[i+1].fitness.values
 
-        # --- Mutación ---
+        # Mutación
         for ind in offspring:
             if random.random() < mutpb:
                 toolbox.mutate(ind)
                 del ind.fitness.values
 
-        # --- Evaluar descendencia ---
+        # Evaluar descendencia
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
         for ind in invalid_ind:
             ind.fitness.values = toolbox.evaluate(ind)
 
-        # --- Elitismo ---
-        elite = tools.selBest(pop, 1)[0]
-        elite_clone = tools.clone(elite)
+        # Elitismo simple: mantén el mejor de pop anterior
+        elite = deepcopy(tools.selBest(pop, 1)[0])
 
-        pop[:] = offspring
+        # Reemplazo generacional
+        pop = offspring
+        # insertar élite
         worst = tools.selWorst(pop, 1)[0]
-        pop[pop.index(worst)] = elite_clone
+        pop[pop.index(worst)] = elite
 
-        # --- Modo MEMÉTICO ---
+        # === MODO MEMÉTICO: búsqueda local sobre los mejores cada X generaciones
         if memetic_interval > 0 and gen % memetic_interval == 0:
             best_inds = tools.selBest(pop, memetic_best_k)
             for ind in best_inds:
-                local_search_1swap(
-                    ind,
-                    evaluate=toolbox.evaluate,
-                    nH=nH,
-                    max_iterations=10,
-                    neighbors_per_iteration=5,
-                )
+                local_search_1swap_ind(ind, toolbox, nH,
+                                       max_iterations=10,
+                                       neighbors_per_iteration=5,
+                                       rng=rng)
 
-        # --- Estadísticas ---
+        # Actualizar Hall of Fame
+        hof.update(pop)
+
+        # Estadísticas
         fits = [ind.fitness.values[0] for ind in pop]
-        history.append({
-            "gen": gen,
-            "min": min(fits),
-            "avg": sum(fits)/len(fits),
-            "max": max(fits),
-        })
-        print(f"Gen {gen:3d} | min={min(fits):.4f}  avg={sum(fits)/len(fits):.4f}")
+        _record_log(log, gen=gen, fitness_values=fits)
 
-    best_ind = tools.selBest(pop, 1)[0]
-    best_fit = best_ind.fitness.values[0]
-    return best_ind, best_fit, history
+        if verbose:
+            print(f"[GA] gen={gen} min={min(fits):.6f} avg={sum(fits)/len(fits):.6f} max={max(fits):.6f}")
+
+    return pop, hof, log
