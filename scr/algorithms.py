@@ -486,3 +486,93 @@ def run_aco_subset(toolbox,
     pop = [best]
     return pop, hof, log
 
+# =========================
+# 7) GA memético
+# =========================
+def run_memetic_ga(
+    toolbox,
+    D,
+    pop_size=100,
+    ngen=100,
+    cxpb=0.9,
+    mutpb=0.2,
+    memetic_interval=5,
+    memetic_best_k=5,
+):
+    """
+    Ejecuta un GA memético:
+      - Selección torneo
+      - Cruce: crossover_set_based
+      - Mutación: mutation_1swap
+      - Fitness: fitness_function_factory (ya registrado en toolbox)
+      - Búsqueda local: local_search_1swap cada 'memetic_interval' generaciones
+    """
+    V, nH = D.shape
+
+    # 1) Población inicial
+    pop = toolbox.population(n=pop_size)
+
+    # 2) Evaluación inicial
+    for ind in pop:
+        ind.fitness.values = toolbox.evaluate(ind)
+
+    history = []
+
+    for gen in range(1, ngen + 1):
+        # --- Selección ---
+        offspring = toolbox.select(pop, len(pop))
+        offspring = list(map(tools.clone, offspring))
+
+        # --- Crossover ---
+        for i in range(0, len(offspring), 2):
+            if i + 1 >= len(offspring):
+                break
+            if random.random() < cxpb:
+                toolbox.mate(offspring[i], offspring[i + 1])
+                del offspring[i].fitness.values
+                del offspring[i + 1].fitness.values
+
+        # --- Mutación ---
+        for ind in offspring:
+            if random.random() < mutpb:
+                toolbox.mutate(ind)
+                del ind.fitness.values
+
+        # --- Evaluar descendencia ---
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        for ind in invalid_ind:
+            ind.fitness.values = toolbox.evaluate(ind)
+
+        # --- Elitismo ---
+        elite = tools.selBest(pop, 1)[0]
+        elite_clone = tools.clone(elite)
+
+        pop[:] = offspring
+        worst = tools.selWorst(pop, 1)[0]
+        pop[pop.index(worst)] = elite_clone
+
+        # --- Modo MEMÉTICO ---
+        if memetic_interval > 0 and gen % memetic_interval == 0:
+            best_inds = tools.selBest(pop, memetic_best_k)
+            for ind in best_inds:
+                local_search_1swap(
+                    ind,
+                    evaluate=toolbox.evaluate,
+                    nH=nH,
+                    max_iterations=10,
+                    neighbors_per_iteration=5,
+                )
+
+        # --- Estadísticas ---
+        fits = [ind.fitness.values[0] for ind in pop]
+        history.append({
+            "gen": gen,
+            "min": min(fits),
+            "avg": sum(fits)/len(fits),
+            "max": max(fits),
+        })
+        print(f"Gen {gen:3d} | min={min(fits):.4f}  avg={sum(fits)/len(fits):.4f}")
+
+    best_ind = tools.selBest(pop, 1)[0]
+    best_fit = best_ind.fitness.values[0]
+    return best_ind, best_fit, history

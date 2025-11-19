@@ -292,6 +292,128 @@ def greedy2_assignment_with_capacities(
     return assign, float(Z), cap_left, penalty_unserved, num_unserved
 
 
+# Crossover con conjuntos (intersección + diferencia)
+def crossover_set_based(ind1, ind2, H, p, rng=random):
+    """
+    Operador DEAP:
+    - Toma ind1 e ind2 (lists de longitud p, sin duplicados)
+    - Aplica tu crossover de conjuntos
+    - Sobrescribe ind1[:] y ind2[:] con los nuevos hijos
+    - Devuelve (ind1, ind2)
+    """
+
+    set1, set2 = set(ind1), set(ind2)
+    common = list(set1 & set2)
+    diff   = list((set1 | set2) - (set1 & set2))
+
+    rng.shuffle(common)
+    rng.shuffle(diff)
+
+    # ===== Hijo 1 =====
+    child1 = []
+    for h in common:
+        if len(child1) < p:
+            child1.append(h)
+    for h in diff:
+        if len(child1) < p and h not in child1:
+            child1.append(h)
+    if len(child1) < p:
+        remaining = list(set(range(H)) - set(child1))
+        rng.shuffle(remaining)
+        child1 += remaining[:p - len(child1)]
+
+    # ===== Hijo 2 =====
+    child2 = []
+    for h in diff:
+        if len(child2) < p:
+            child2.append(h)
+    for h in common:
+        if len(child2) < p and h not in child2:
+            child2.append(h)
+    if len(child2) < p:
+        remaining = list(set(range(H)) - set(child2))
+        rng.shuffle(remaining)
+        child2 += remaining[:p - len(child2)]
+
+    # === IMPORTANTÍSIMO: volcar en ind1 e ind2 ===
+    ind1[:] = child1
+    ind2[:] = child2
+
+    return ind1, ind2
+
+# Mutacion 1-swap simple
+def mutation_1swap(individual, H, rng=random):
+    """
+    Operador DEAP:
+    - Hace un 1-swap: quita un hospital y añade otro que no esté
+    - Modifica el individuo in-place
+    - Devuelve (individual,)
+    """
+
+    p = len(individual)
+    if p == 0:
+        return individual,
+
+    pos_remove = rng.randrange(p)
+    current_set = set(individual)
+
+    candidates_out = list(set(range(H)) - current_set)
+    if candidates_out:
+        h_add = rng.choice(candidates_out)
+        individual[pos_remove] = h_add
+
+    return individual,
+
+# Búsqueda local (hill-climbing con 1-swap)
+def local_search_1swap(
+    individual,
+    evaluate,
+    nH,
+    max_iterations=20,
+    neighbors_per_iteration=10,
+    rng=random,
+):
+    """
+    Búsqueda local hill-climbing sobre un individuo DEAP.
+    Movimiento: 1-swap (como tu mutación).
+    Usa 'evaluate' (toolbox.evaluate) y minimiza.
+    """
+    current = list(individual)
+    p = len(current)
+
+    current_f = evaluate(current)[0]
+
+    for _ in range(max_iterations):
+        improved = False
+
+        for _ in range(neighbors_per_iteration):
+            pos_remove = rng.randrange(p)
+
+            current_set = set(current)
+            candidates_out = list(set(range(nH)) - current_set)
+            if not candidates_out:
+                continue
+
+            h_add = rng.choice(candidates_out)
+
+            neighbor = list(current)
+            neighbor[pos_remove] = h_add
+
+            neighbor_f = evaluate(neighbor)[0]
+
+            if neighbor_f < current_f:
+                current = neighbor
+                current_f = neighbor_f
+                improved = True
+                break
+
+        if not improved:
+            break
+
+    individual[:] = current
+    individual.fitness.values = (current_f,)
+    return individual
+
 def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: float = 1e6, unserved_penalty: float = 1.0):
     """
     Crea una función fitness que:
@@ -379,8 +501,8 @@ def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed
 
     # Selección, cruce, mutación
     toolbox.register("select", tools.selTournament, tournsize=3)
-    toolbox.register("mate", cx_set_based, nH=H, p=p)
-    toolbox.register("mutate", mut_replace_gene, nH=H, p=p, indpb=0.2)
+    toolbox.register("mate", crossover_set_based, nH=H, p=p)
+    toolbox.register("mutate", mutation_1swap, nH=H, p=p, indpb=0.2)
 
     return toolbox
 
