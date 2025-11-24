@@ -14,6 +14,98 @@ def make_random_individual(nH: int, p: int) -> List[int]:
     ind.sort()
     return ind
 
+import random
+from typing import List, Iterable
+from copy import deepcopy
+import numpy as np
+
+# ... resto de imports que ya tienes arriba en functions.py
+
+def init_population_max_diversity(
+    toolbox,
+    nH: int,
+    p: int,
+    mu: int,
+    candidates_per_ind: int = 50,
+    seed: int | None = None,
+):
+    """
+    Inicializa una población de tamaño `mu` de manera muy exploratoria (max-diversity):
+
+      - Individuos = subconjuntos de tamaño fijo p sobre {0, ..., nH-1}.
+      - Primer individuo: aleatorio.
+      - Cada nuevo individuo:
+          * Se generan `candidates_per_ind` candidatos aleatorios.
+          * Para cada candidato C se calcula:
+                Δ(C) = min_{I en población actual} d(C, I)
+            donde d(C, I) = 1 - |C ∩ I| / p  (distancia de conjuntos).
+          * Se elige el candidato con mayor Δ(C) (el más alejado de todos los anteriores).
+
+      - Devuelve: lista de individuos del tipo correcto (creator.Individual).
+      - NO evalúa la población; sólo la construye.
+
+    Parámetros:
+      toolbox: toolbox de DEAP (usa toolbox.individual o bien _mk_ind si lo tienes).
+      nH: nº total de hospitales (genes posibles: 0..nH-1).
+      p: nº de hospitales abiertos por individuo (tamaño del subconjunto).
+      mu: tamaño de la población.
+      candidates_per_ind: nº de candidatos aleatorios que se prueban para cada nuevo individuo.
+      seed: semilla opcional de aleatoriedad.
+    """
+
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+    print(f"Inicializando población max-diversity: nH={nH}, p={p}, mu={mu}, candidates_per_ind={candidates_per_ind}, seed={seed}")
+    def _random_individual():
+        """Genera un individuo aleatorio (subconjunto ordenado de tamaño p)."""
+        genes = random.sample(range(nH), p)
+        genes.sort()
+        # Si tienes _mk_ind(toolbox, genes) puedes usarlo:
+        #   return _mk_ind(toolbox, genes)
+        # Pero por defecto usamos el tipo del toolbox:
+        ind_cls = type(toolbox.individual())
+        return ind_cls(genes)
+
+    def _subset_distance(ind1: Iterable[int], ind2: Iterable[int]) -> float:
+        """
+        d(A,B) = 1 - |A ∩ B| / p  ∈ [0,1]
+          - 0 si son idénticos
+          - 1 si no comparten ningún gen
+        """
+        set1 = set(ind1)
+        set2 = set(ind2)
+        inter = len(set1.intersection(set2))
+        return 1.0 - (inter / float(p))
+
+    pop: List = []
+    if mu <= 0:
+        return pop
+
+    # Primer individuo totalmente aleatorio
+    first = _random_individual()
+    pop.append(first)
+
+    # Resto de individuos con esquema max-min (max-diversity)
+    while len(pop) < mu:
+        best_cand = None
+        best_score = -1.0
+
+        for _ in range(candidates_per_ind):
+            cand = _random_individual()
+
+            # Distancia de cand al más cercano de la población actual
+            min_d = min(_subset_distance(cand, ind) for ind in pop)
+
+            if min_d > best_score:
+                best_score = min_d
+                best_cand = cand
+
+        pop.append(best_cand)
+
+    return pop
+
+
 def cx_set_based(ind1, ind2, nH: int, p: int):
     """
     Cruce específico para subconjuntos (evita duplicados y mantiene tamaño p).

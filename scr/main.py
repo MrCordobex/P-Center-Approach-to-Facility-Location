@@ -1,7 +1,10 @@
+import os
+os.environ["OMP_NUM_THREADS"] = "2"
 import utils.utils as ut
 import scr.algorithms as alg
 import scr.functions as fn
 import pandas as pd
+
 # para ejecutar desde la raíz del proyecto hacemos python -m scr.main
 # -----------------------------------------------------------
 # Ajuste capacidades y demandas
@@ -31,7 +34,18 @@ toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
 
 # -----------------------------------------------------------
 
-pop, hof, log =  alg.run_eaMuPlusLambda(toolbox, ngen=200, mu=100, lambda_=200, cxpb=0.8, mutpb=0.2, hof_size=3, verbose=True)
+pop, hof, log =  alg.run_acme(toolbox,p=P,
+             ngen = 200,
+             mu_pop = 300,
+             cxpb = 0.9,
+             mutpb = 0.2,
+             hof_size = 3,
+             k_clusters = 15,
+             acme_period = 5,
+             ls_iters = 200,
+             kmeans_max_iter = 50,
+             seed = 0,
+             verbose = True)
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados
