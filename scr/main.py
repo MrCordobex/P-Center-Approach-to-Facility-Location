@@ -31,7 +31,7 @@ toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
 
 # -----------------------------------------------------------
 
-pop, hof, log =  alg.run_eaMuPlusLambda(toolbox, ngen=200, mu=100, lambda_=200, cxpb=0.8, mutpb=0.2, hof_size=3, verbose=True)
+pop, hof, log =  alg.run_memetic_ga(toolbox,D,pop_size=100,ngen=100,cxpb=0.9,mutpb=0.1,memetic_interval=5,memetic_best_k=5,)
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados
