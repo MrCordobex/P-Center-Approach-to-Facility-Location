@@ -384,6 +384,120 @@ def greedy2_assignment_with_capacities(
     return assign, float(Z), cap_left, penalty_unserved, num_unserved
 
 
+# Crossover con conjuntos (intersección + diferencia)
+def crossover_set_based(ind1, ind2, nH: int, p: int):
+    """
+    NUEVO crossover_set_based, usando la misma lógica que cx_set_based:
+      - Trabaja con subconjuntos (listas de índices de hospitales).
+      - Evita duplicados y mantiene tamaño p.
+      - Sobrescribe ind1 e ind2 in-place y los devuelve.
+    """
+    parent1 = list(ind1)
+    parent2 = list(ind2)
+
+    set1, set2 = set(parent1), set(parent2)
+    common = list(set1.intersection(set2))
+    only1 = list(set1 - set2)
+    only2 = list(set2 - set1)
+
+    # Hijo 1
+    child1 = common.copy()
+    random.shuffle(only1)
+    random.shuffle(only2)
+    pool1 = common + only1 + only2
+    for g in pool1:
+        if g not in child1:
+            child1.append(g)
+        if len(child1) == p:
+            break
+
+    # Hijo 2
+    child2 = common.copy()
+    pool2 = common + only2 + only1
+    for g in pool2:
+        if g not in child2:
+            child2.append(g)
+        if len(child2) == p:
+            break
+
+    child1.sort()
+    child2.sort()
+
+    # Sobrescribimos los individuos DEAP in-place
+    ind1[:] = child1
+    ind2[:] = child2
+
+    return ind1, ind2
+
+# Mutacion 1-swap simple
+def mutation_1swap(individual: List[int], nH: int, p: int, indpb: float = 0.2) -> Tuple[List[int]]:
+    """
+    NUEVA mutation_1swap:
+      - Misma lógica que mut_replace_gene.
+      - Recorre cada posición y con prob indpb hace un 'swap' por un hospital libre.
+      - Mantiene tamaño p y unicidad.
+    """
+    current = set(individual)
+    all_idx = set(range(nH))
+    free = list(all_idx - current)
+
+    for pos in range(p):
+        if random.random() < indpb and free:
+            new_gene = random.choice(free)
+            free.remove(new_gene)
+            free.append(individual[pos])
+            individual[pos] = new_gene
+
+    individual.sort()
+    return (individual,)
+
+# Búsqueda local (hill-climbing con 1-swap)
+
+def local_search_1swap_ind(individual, toolbox, nH,
+                           max_iterations=10,
+                           neighbors_per_iteration=5,
+                           rng=random):
+    """
+    Búsqueda local sencilla tipo hill-climbing usando movimientos 1-swap.
+    Trabaja SOBRE un individuo DEAP.
+    """
+    # lo tratamos como lista normal
+    current = list(individual)
+    p = len(current)
+
+    # fitness actual usando el toolbox
+    current_f = toolbox.evaluate(current)[0]
+
+    for _ in range(max_iterations):
+        improved = False
+
+        for _ in range(neighbors_per_iteration):
+            pos_remove = rng.randrange(p)
+            current_set = set(current)
+            candidates_out = list(set(range(nH)) - current_set)
+            if not candidates_out:
+                continue
+
+            h_add = rng.choice(candidates_out)
+
+            neighbor = list(current)
+            neighbor[pos_remove] = h_add
+            neighbor_f = toolbox.evaluate(neighbor)[0]
+
+            if neighbor_f < current_f:
+                current = neighbor
+                current_f = neighbor_f
+                improved = True
+                break
+
+        if not improved:
+            break
+
+    # volcamos en el individuo DEAP
+    individual[:] = current
+    individual.fitness.values = (current_f,)
+    return individual
+
 def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: float = 1e6, unserved_penalty: float = 1.0):
     """
     Crea una función fitness que:
@@ -471,8 +585,8 @@ def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed
 
     # Selección, cruce, mutación
     toolbox.register("select", tools.selTournament, tournsize=3)
-    toolbox.register("mate", cx_set_based, nH=H, p=p)
-    toolbox.register("mutate", mut_replace_gene, nH=H, p=p, indpb=0.2)
+    toolbox.register("mate", crossover_set_based, nH=H, p=p)
+    toolbox.register("mutate", mutation_1swap, nH=H, p=p, indpb=0.2)
 
     return toolbox
 
