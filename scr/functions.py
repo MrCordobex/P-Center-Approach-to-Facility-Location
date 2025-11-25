@@ -359,8 +359,86 @@ def mutation_1swap(individual: List[int], nH: int, p: int, indpb: float = 0.2) -
     individual.sort()
     return (individual,)
 
-# Búsqueda local (hill-climbing con 1-swap)
+# Mutacion por temperatura
+def mutation_temp(individual: List[int], nH: int, p: int, T: float, indpb: float = 0.2) -> Tuple[List[int]]:
+    """
+    Mutación 1-swap con recocido simulado, usando T como parámetro explícito:
+      - T alta (~1): cambio global (hospital complementario)
+      - T baja (~0): cambio local (hospital cercano)
+      - Mantiene tamaño p y unicidad
+      - Se aplica a cada posición con prob indpb
 
+    Args:
+        individual : lista ordenada (genes únicos)
+        nH : número total de hospitales
+        p : tamaño del individuo (nº de hospitales abiertos)
+        T : temperatura actual en [0,1]
+        indpb : probabilidad de mutar cada gen
+    """
+
+    H = nH
+    all_idx = set(range(H))
+    max_radius = min(10, H // 2) if H > 1 else 1
+
+    for pos in range(p):
+        if random.random() >= indpb:
+            continue
+
+        current = set(individual)
+        old_gene = individual[pos]
+
+        # ---------------------------
+        #   T ALTA → salto global
+        # ---------------------------
+        if T > 0.8:
+            candidate = (old_gene + H // 2) % H
+
+            if candidate in current:
+                free = list(all_idx - current)
+                if not free:
+                    continue
+                candidate = random.choice(free)
+
+        else:
+            # ---------------------------
+            #   T BAJA → cambio local
+            # ---------------------------
+            radius = max(1, int(1 + T * (max_radius - 1)))
+            candidate = old_gene
+
+            for _ in range(20):
+                offset = random.randint(-radius, radius)
+                if offset == 0:
+                    continue
+                new_gene = (old_gene + offset) % H
+                if new_gene not in current:
+                    candidate = new_gene
+                    break
+
+            # fallback: salto global
+            if candidate == old_gene:
+                comp = (old_gene + H // 2) % H
+                if comp not in current:
+                    candidate = comp
+                else:
+                    free = list(all_idx - current)
+                    if not free:
+                        continue
+                    candidate = random.choice(free)
+
+        # Duplicados: elegir un libre
+        if candidate in current and candidate != old_gene:
+            free = [g for g in (all_idx - current) if g != old_gene]
+            if not free:
+                continue
+            candidate = random.choice(free)
+
+        individual[pos] = candidate
+
+    individual.sort()
+    return (individual,)
+
+# Búsqueda local (hill-climbing con 1-swap)
 def local_search_1swap_ind(individual, toolbox, nH,
                            max_iterations=10,
                            neighbors_per_iteration=5,
@@ -494,7 +572,7 @@ def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed
     # Selección, cruce, mutación
     toolbox.register("select", tools.selTournament, tournsize=3)
     toolbox.register("mate", crossover_set_based, nH=H, p=p)
-    toolbox.register("mutate", mutation_1swap, nH=H, p=p, indpb=0.2)
+    toolbox.register("mutate", mutation_temp, nH=H, p=p, indpb=0.2)
 
     return toolbox
 

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from collections import deque
 from deap import base, creator, tools, algorithms
-from scr.functions import _mk_ind, _evaluate, _init_logbook, _record_log, _neighbors_swaps, local_search_1swap_ind
+from scr.functions import _mk_ind, _evaluate, _init_logbook, _record_log, _neighbors_swaps
 
 
 def run_eaSimple(toolbox, ngen=200, mu_pop=200, cxpb=0.8, mutpb=0.2, hof_size=5, verbose=True):
@@ -487,10 +487,130 @@ def run_aco_subset(toolbox,
     return pop, hof, log
 
 # =========================
+# Tabu para GA memético
+# =========================
+def run_tabu_search_memetico(toolbox,
+                    nH: int,
+                    p: int,
+                    start: list,
+                    tabu_tenure: int = 10,
+                    max_iters: int = 300,
+                    max_neighbors: int = 200,
+                    seed: int = 0,
+                    hof_size: int = 1,
+                    verbose: bool = False):
+    """
+    Tabu Search para p-center capacitado basado en 1-swap:
+
+      - 'start' es la solución inicial (lista de p hospitales abiertos)
+      - nH: número total de hospitales
+      - p: número de hospitales a abrir
+      - Movimientos: quitar 1 hospital y añadir otro no presente (1-swap)
+
+    Devuelve:
+        population, hall_of_fame, logbook (igual estilo DEAP)
+    """
+
+    rng = random.Random(seed)
+
+    # Inicializar solución
+    current = deepcopy(start)
+    current_f = toolbox.evaluate(current)[0]
+
+    # Mejor global
+    best = deepcopy(current)
+    best_f = current_f
+
+    # Tabu list (memoria de movimientos recientes)
+    tabu_list = dict()      # clave = movimiento (pos_remove, h_add), valor = iteración hasta la que es TABU
+
+    # Hall of Fame local
+    hof = tools.HallOfFame(hof_size)
+
+    # ==== BUCLE PRINCIPAL TABU ====
+    for it in range(max_iters):
+
+        neighborhood = []
+
+        current_set = set(current)
+        free = list(set(range(nH)) - current_set)
+
+        # 1) Generamos vecinos mediante 1-swap (pos_remove, h_add)
+        for _ in range(max_neighbors):
+            if not free:
+                break
+
+            pos_remove = rng.randrange(p)
+            h_add = rng.choice(free)
+
+            move = (current[pos_remove], h_add)
+
+            neighbor = list(current)
+            neighbor[pos_remove] = h_add
+
+            f_neighbor = toolbox.evaluate(neighbor)[0]
+
+            neighborhood.append((neighbor, f_neighbor, move))
+
+        if not neighborhood:
+            break  # no hay vecinos posibles
+
+        # 2) Elegimos el mejor vecino permitido por Tabu (o Tabu con aspiración)
+        neighborhood.sort(key=lambda x: x[1])  # sort by fitness
+        chosen = None
+
+        for neighbor, f_nb, move in neighborhood:
+            banned_until = tabu_list.get(move, -1)
+
+            # Aspiración: si mejora al best global, se permite aunque sea Tabu
+            aspiration = f_nb < best_f
+
+            is_tabu = (it < banned_until)
+
+            if not is_tabu or aspiration:
+                chosen = (neighbor, f_nb, move)
+                break
+
+        if chosen is None:
+            # si todos son Tabu y ninguno mejora, cogemos el mejor igualmente
+            chosen = neighborhood[0]
+
+        neighbor, f_nb, move = chosen
+
+        # 3) Aplicar el movimiento
+        current = neighbor
+        current_f = f_nb
+
+        # 4) Actualizar mejor global
+        if current_f < best_f:
+            best = deepcopy(current)
+            best_f = current_f
+
+        # 5) Actualizar lista Tabú
+        tabu_list[move] = it + tabu_tenure
+
+        # 6) Guardar en Hall of Fame
+        ind = toolbox.individual()
+        ind[:] = current
+        ind.fitness.values = (current_f,)
+        hof.update([ind])
+
+        if verbose and it % 50 == 0:
+            print(f"[TABU] iter={it}  best={best_f:.5f}")
+
+    # === FORMATO DE RETORNO ===
+    pop = [hof[0]]  # población ficticia con el mejor
+    log = None      # no usamos log aquí
+    return pop, hof, log
+
+
+
+# =========================
 # 7) GA memético
 # =========================
 def run_memetic_ga(toolbox,
                    D,
+                   p: int,
                    pop_size: int = 100,
                    ngen: int = 100,
                    cxpb: float = 0.9,
@@ -501,20 +621,40 @@ def run_memetic_ga(toolbox,
                    seed: int = 0,
                    verbose: bool = True):
     """
-    GA memético para tu p-center capacitado.
+    GA MEMÉTICO para p-center capacitado:
+
+      - Población de soluciones (subconjuntos de p hospitales).
+      - Parte memética: Tabu Search sobre los mejores individuos cada
+        'memetic_interval' generaciones.
+
+    Parámetros:
+      toolbox            : toolbox DEAP ya configurado (individuos, fitness, mate, mutate, select).
+      D                  : matriz de distancias (V x H).
+      p                  : número de hospitales a abrir.
+      pop_size           : tamaño de población.
+      ngen               : número de generaciones.
+      cxpb               : probabilidad de crossover.
+      mutpb              : probabilidad de mutación.
+      memetic_interval   : cada cuántas generaciones se aplica Tabu Search.
+      memetic_best_k     : número de mejores individuos que se mejoran con Tabu.
+      hof_size           : tamaño del Hall of Fame.
+      seed               : semilla aleatoria.
+      verbose            : si True, imprime estadísticos por generación.
 
     Devuelve:
-      - pop: población final
-      - hof: Hall of Fame (mejores individuos)
-      - log: logbook con (gen, min, avg, max)
+      pop : población final
+      hof : Hall of Fame (mejores individuos)
+      log : logbook con estadísticas (min, avg, max por gen)
     """
+
+    random.seed(seed)
     rng = random.Random(seed)
     V, nH = D.shape
 
     log = _init_logbook()
     hof = tools.HallOfFame(hof_size)
 
-    # === Población inicial
+    # === Población inicial ===
     pop = toolbox.population(n=pop_size)
 
     # Evaluar población inicial
@@ -528,26 +668,33 @@ def run_memetic_ga(toolbox,
     if verbose:
         print(f"[GA] gen=0 min={min(fits):.6f} avg={sum(fits)/len(fits):.6f} max={max(fits):.6f}")
 
-    # === Bucle evolutivo
+    # === Bucle evolutivo ===
     for gen in range(1, ngen + 1):
-        # Selección -> como haces en otros algoritmos
+
+        # --------- NUEVO: temperatura de esta generación (en [0,1]) ---------
+        # Lineal: gen=1 -> T≈1 ; gen=ngen -> T≈0
+        T = 1.0 - (gen - 1) / max(1, (ngen - 1))
+        # --------------------------------------------------------------------
+
+        # Selección
         offspring = toolbox.select(pop, len(pop))
-        # Clonado (usamos deepcopy, no tools.clone)
         offspring = [deepcopy(ind) for ind in offspring]
 
         # Crossover
         for i in range(0, len(offspring), 2):
             if i + 1 >= len(offspring):
                 break
-            if random.random() < cxpb:
+            if rng.random() < cxpb:
                 offspring[i], offspring[i+1] = toolbox.mate(offspring[i], offspring[i+1])
                 del offspring[i].fitness.values
                 del offspring[i+1].fitness.values
 
         # Mutación
         for ind in offspring:
-            if random.random() < mutpb:
-                toolbox.mutate(ind)
+            if rng.random() < mutpb:
+                # --------- CAMBIO IMPORTANTE: pasar T a la mutación ---------
+                toolbox.mutate(ind, T=T)
+                # ------------------------------------------------------------
                 del ind.fitness.values
 
         # Evaluar descendencia
@@ -555,23 +702,40 @@ def run_memetic_ga(toolbox,
         for ind in invalid_ind:
             ind.fitness.values = toolbox.evaluate(ind)
 
-        # Elitismo simple: mantén el mejor de pop anterior
+        # Elitismo: guardar el mejor de la generación anterior
         elite = deepcopy(tools.selBest(pop, 1)[0])
 
         # Reemplazo generacional
         pop = offspring
-        # insertar élite
         worst = tools.selWorst(pop, 1)[0]
         pop[pop.index(worst)] = elite
 
-        # === MODO MEMÉTICO: búsqueda local sobre los mejores cada X generaciones
-        if memetic_interval > 0 and gen % memetic_interval == 0:
+        # === BÚSQUEDA LOCAL (modo memético con TABU / SA) ===
+        if memetic_interval > 0 and gen % memetic_interval == 0 and memetic_best_k > 0:
             best_inds = tools.selBest(pop, memetic_best_k)
+
             for ind in best_inds:
-                local_search_1swap_ind(ind, toolbox, nH,
-                                       max_iterations=10,
-                                       neighbors_per_iteration=5,
-                                       rng=rng)
+                start_genes = list(ind)
+                hc_seed = rng.randint(0, 10**9)
+
+                _, hc_hof, _ = run_simulated_annealing(
+                    toolbox,
+                    nH=nH,
+                    p=p,
+                    start=start_genes,
+                    T0=100.0,
+                    Tmin=1e-3,
+                    alpha=0.95,
+                    iters_per_T=50,
+                    seed=hc_seed,      # ya que lo has calculado ;)
+                    hof_size=1,
+                    verbose=False
+                )
+                local_best = hc_hof[0]
+
+                if local_best.fitness.values[0] < ind.fitness.values[0]:
+                    ind[:] = local_best[:]
+                    ind.fitness.values = local_best.fitness.values
 
         # Actualizar Hall of Fame
         hof.update(pop)

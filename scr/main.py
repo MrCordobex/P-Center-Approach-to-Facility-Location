@@ -2,6 +2,7 @@ import utils.utils as ut
 import scr.algorithms as alg
 import scr.functions as fn
 import pandas as pd
+import random
 # para ejecutar desde la raíz del proyecto hacemos python -m scr.main
 # -----------------------------------------------------------
 # Ajuste capacidades y demandas
@@ -15,7 +16,8 @@ ut.capacities_demand(
 # -----------------------------------------------------------
 # Parámetros del problema
 P = 10  # número de hospitales a abrir (ajústalo)
-SEED = 100
+# Semilla ramdom para reproducibilidad
+SEED = random.seed(42)
 
 # Cargar datos
 D, q, C, city_ids, hosp_ids = ut.load_data(
@@ -31,7 +33,18 @@ toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
 
 # -----------------------------------------------------------
 
-pop, hof, log =  alg.run_memetic_ga(toolbox,D,pop_size=100,ngen=100,cxpb=0.9,mutpb=0.1,memetic_interval=5,memetic_best_k=5,)
+pop, hof, log =  alg.run_memetic_ga(toolbox,
+                   D,
+                   p=P,
+                   pop_size= 100,
+                   ngen= 200,
+                   cxpb= 0.9,
+                   mutpb= 0.11,
+                   memetic_interval = 200,
+                   memetic_best_k = 5,
+                   hof_size = 1,
+                   seed=SEED,
+                   verbose = True)
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados
