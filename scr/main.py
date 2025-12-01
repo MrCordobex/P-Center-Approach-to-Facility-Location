@@ -11,13 +11,14 @@ ut.capacities_demand(
     ruta_hospitales="data/processed/Hospitales_Completo.csv",
     ruta_destino_ciudades="data/processed/Ciudades_Con_Demanda.csv",
     ruta_destino_hospitales="data/processed/Hospitales_Con_Capacidad.csv",
-    H=30, LOS=5, occ=0.9, rho=0.001
+    H=30, LOS=5, occ=0.9, rho=0.01
 )
 # -----------------------------------------------------------
 # Parámetros del problema
-P = 10  # número de hospitales a abrir (ajústalo)
+P = 70  # número de hospitales a abrir (ajústalo)
 # Semilla ramdom para reproducibilidad
-SEED = random.seed(42)
+SEED = random.randint(0, 10**9)
+random.seed(SEED)
 
 # Cargar datos
 D, q, C, city_ids, hosp_ids = ut.load_data(
@@ -39,12 +40,13 @@ pop, hof, log =  alg.run_memetic_ga(toolbox,
                    pop_size= 100,
                    ngen= 200,
                    cxpb= 0.9,
-                   mutpb= 0.11,
+                   mutpb= 0.7,
                    memetic_interval = 200,
-                   memetic_best_k = 5,
+                   memetic_best_k = 1,
                    hof_size = 1,
                    seed=SEED,
                    verbose = True)
+
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados

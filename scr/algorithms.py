@@ -162,16 +162,12 @@ def run_simulated_annealing(toolbox,
     while T > Tmin:
         gen += 1
         for _ in range(iters_per_T):
-            # swap aleatorio 1-por-1
-            pos = rng.randrange(p)
-            open_set = set(cur)
-            closed = list(set(range(nH)) - open_set)
-            new_gene = rng.choice(closed)
-            child = list(cur)
-            child[pos] = new_gene
-            child.sort()
-            child = _mk_ind(toolbox, child)
+            # ======= NUEVO: vecino generado con mutate_local (1-swap cercano) =======
+            child = deepcopy(cur)              # copiamos el individuo actual
+            child, = toolbox.mutate_local(child)  # mutate_local devuelve (ind,)
             cf = _evaluate(toolbox, child)
+            # ========================================================================
+
             delta = cf - cur_f  # minimizar
 
             if delta < 0 or rng.random() < math.exp(-delta / max(T, 1e-12)):

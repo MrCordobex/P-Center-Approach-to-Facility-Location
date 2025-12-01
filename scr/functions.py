@@ -308,28 +308,28 @@ def crossover_set_based(ind1, ind2, nH: int, p: int):
     only1 = list(set1 - set2)
     only2 = list(set2 - set1)
 
-    # Hijo 1
+    # Unimos los disjuntos
+    disjuntos = only1 + only2   # importante: sin repetir common
+
+   # ---------------- Hijo 1 ----------------
     child1 = common.copy()
-    random.shuffle(only1)
-    random.shuffle(only2)
-    pool1 = common + only1 + only2
+    pool1 = disjuntos.copy()
+    random.shuffle(pool1)
+
     for g in pool1:
-        if g not in child1:
-            child1.append(g)
         if len(child1) == p:
             break
+        child1.append(g)
 
-    # Hijo 2
+    # ---------------- Hijo 2 ----------------
     child2 = common.copy()
-    pool2 = common + only2 + only1
+    pool2 = disjuntos.copy()
+    random.shuffle(pool2)
+
     for g in pool2:
-        if g not in child2:
-            child2.append(g)
         if len(child2) == p:
             break
-
-    child1.sort()
-    child2.sort()
+        child2.append(g)
 
     # Sobrescribimos los individuos DEAP in-place
     ind1[:] = child1
@@ -337,152 +337,112 @@ def crossover_set_based(ind1, ind2, nH: int, p: int):
 
     return ind1, ind2
 
-# Mutacion 1-swap simple
-def mutation_1swap(individual: List[int], nH: int, p: int, indpb: float = 0.2) -> Tuple[List[int]]:
-    """
-    NUEVA mutation_1swap:
-      - Misma lógica que mut_replace_gene.
-      - Recorre cada posición y con prob indpb hace un 'swap' por un hospital libre.
-      - Mantiene tamaño p y unicidad.
-    """
-    current = set(individual)
-    all_idx = set(range(nH))
-    free = list(all_idx - current)
-
-    for pos in range(p):
-        if random.random() < indpb and free:
-            new_gene = random.choice(free)
-            free.remove(new_gene)
-            free.append(individual[pos])
-            individual[pos] = new_gene
-
-    individual.sort()
-    return (individual,)
-
 # Mutacion por temperatura
-def mutation_temp(individual: List[int], nH: int, p: int, T: float, indpb: float = 0.2) -> Tuple[List[int]]:
+def mutation_temp(individual: List[int],
+                  nH: int,
+                  p: int,
+                  T: float) -> Tuple[List[int]]:
     """
-    Mutación 1-swap con recocido simulado, usando T como parámetro explícito:
-      - T alta (~1): cambio global (hospital complementario)
-      - T baja (~0): cambio local (hospital cercano)
-      - Mantiene tamaño p y unicidad
-      - Se aplica a cada posición con prob indpb
+    Mutación 1-swap dependiente de temperatura:
 
-    Args:
-        individual : lista ordenada (genes únicos)
-        nH : número total de hospitales
-        p : tamaño del individuo (nº de hospitales abiertos)
-        T : temperatura actual en [0,1]
-        indpb : probabilidad de mutar cada gen
+      - Siempre hace UN único 1-swap por llamada.
+      - Con probabilidad p_global = T: salto global (complementario).
+      - Con probabilidad 1 - T: cambio local (hospital cercano).
+      - T en [0,1]:
+          * T=1 -> siempre global
+          * T=0 -> siempre local
+
+      Mantiene tamaño p y unicidad.
     """
 
     H = nH
+    if p == 0 or H <= 1:
+        return (individual,)
+
     all_idx = set(range(H))
+    open_set = set(individual)
+    closed = list(all_idx - open_set)
+    if not closed:
+        return (individual,)
+
+    # Aseguramos T en [0,1]
+    T = max(0.0, min(1.0, float(T)))
+
+    # Probabilidad de salto global = T
+    p_global = T
+
+    # Elegimos una posición aleatoria a mutar
+    pos = random.randrange(p)
+    old_gene = individual[pos]
+
+    # Radio máximo para cambios locales
     max_radius = min(10, H // 2) if H > 1 else 1
 
-    for pos in range(p):
-        if random.random() >= indpb:
-            continue
+    if random.random() < p_global:
+        # ====== SALTO GLOBAL (complementario) ======
+        candidate = (old_gene + H // 2) % H
+        if candidate in open_set:
+            candidate = random.choice(closed)
+    else:
+        # ====== CAMBIO LOCAL (cercano) ======
+        # Radio decreciente con T (más fino con T baja)
+        radius = max(1, int(1 + T * (max_radius - 1)))
+        candidate = old_gene
 
-        current = set(individual)
-        old_gene = individual[pos]
-
-        # ---------------------------
-        #   T ALTA → salto global
-        # ---------------------------
-        if T > 0.8:
-            candidate = (old_gene + H // 2) % H
-
-            if candidate in current:
-                free = list(all_idx - current)
-                if not free:
-                    continue
-                candidate = random.choice(free)
-
-        else:
-            # ---------------------------
-            #   T BAJA → cambio local
-            # ---------------------------
-            radius = max(1, int(1 + T * (max_radius - 1)))
-            candidate = old_gene
-
-            for _ in range(20):
-                offset = random.randint(-radius, radius)
-                if offset == 0:
-                    continue
-                new_gene = (old_gene + offset) % H
-                if new_gene not in current:
-                    candidate = new_gene
-                    break
-
-            # fallback: salto global
-            if candidate == old_gene:
-                comp = (old_gene + H // 2) % H
-                if comp not in current:
-                    candidate = comp
-                else:
-                    free = list(all_idx - current)
-                    if not free:
-                        continue
-                    candidate = random.choice(free)
-
-        # Duplicados: elegir un libre
-        if candidate in current and candidate != old_gene:
-            free = [g for g in (all_idx - current) if g != old_gene]
-            if not free:
+        for _ in range(20):
+            offset = random.randint(-radius, radius)
+            if offset == 0:
                 continue
-            candidate = random.choice(free)
+            new_gene = (old_gene + offset) % H
+            if new_gene not in open_set:
+                candidate = new_gene
+                break
 
-        individual[pos] = candidate
+        if candidate == old_gene:
+            candidate = random.choice(closed)
 
+    individual[pos] = candidate
     individual.sort()
+
     return (individual,)
 
 # Búsqueda local (hill-climbing con 1-swap)
-def local_search_1swap_ind(individual, toolbox, nH,
-                           max_iterations=10,
-                           neighbors_per_iteration=5,
-                           rng=random):
-    """
-    Búsqueda local sencilla tipo hill-climbing usando movimientos 1-swap.
-    Trabaja SOBRE un individuo DEAP.
-    """
-    # lo tratamos como lista normal
-    current = list(individual)
-    p = len(current)
+def mutate_local(individual: List[int], nH: int, p: int, radius: int = 3, indpb=None) -> Tuple[List[int]]:
+    H = nH
+    if p == 0 or H <= 1:
+        return (individual,)
 
-    # fitness actual usando el toolbox
-    current_f = toolbox.evaluate(current)[0]
+    open_set = set(individual)
+    all_idx = set(range(H))
+    closed = list(all_idx - open_set)
 
-    for _ in range(max_iterations):
-        improved = False
+    if not closed:
+        return (individual,)
 
-        for _ in range(neighbors_per_iteration):
-            pos_remove = rng.randrange(p)
-            current_set = set(current)
-            candidates_out = list(set(range(nH)) - current_set)
-            if not candidates_out:
-                continue
+    # 1: elegir posición a mutar
+    pos = random.randrange(p)
+    old = individual[pos]
 
-            h_add = rng.choice(candidates_out)
-
-            neighbor = list(current)
-            neighbor[pos_remove] = h_add
-            neighbor_f = toolbox.evaluate(neighbor)[0]
-
-            if neighbor_f < current_f:
-                current = neighbor
-                current_f = neighbor_f
-                improved = True
-                break
-
-        if not improved:
+    # 2: buscar un vecino cercano
+    candidate = old
+    for _ in range(20):
+        offset = random.randint(-radius, radius)
+        if offset == 0:
+            continue
+        new = (old + offset) % H
+        if new not in open_set:
+            candidate = new
             break
 
-    # volcamos en el individuo DEAP
-    individual[:] = current
-    individual.fitness.values = (current_f,)
-    return individual
+    # fallback
+    if candidate == old:
+        candidate = random.choice(closed)
+
+    # aplicar
+    individual[pos] = candidate
+    individual.sort()
+
+    return (individual,)
 
 def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: float = 1e6, unserved_penalty: float = 1.0):
     """
@@ -572,7 +532,9 @@ def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed
     # Selección, cruce, mutación
     toolbox.register("select", tools.selTournament, tournsize=3)
     toolbox.register("mate", crossover_set_based, nH=H, p=p)
-    toolbox.register("mutate", mutation_temp, nH=H, p=p, indpb=0.2)
+    toolbox.register("mutate", mutation_temp, nH=H, p=p)
+    toolbox.register("mutate_local", mutate_local, nH=H, p=p, indpb=0.2)
+    toolbox.register("mut_simple",mut_replace_gene, nH=H, p=p, indpb=0.2)
 
     return toolbox
 
