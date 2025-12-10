@@ -166,6 +166,84 @@ def mut_replace_gene(individual: List[int], nH: int, p: int, indpb: float = 0.2)
     individual.sort()
     return (individual,)
 
+def mutation_temp(individual: List[int], nH: int, p: int, T: float, indpb: float = 0.2) -> Tuple[List[int]]:
+    """
+    Mutación 1-swap con recocido simulado, usando T como parámetro explícito:
+      - T alta (~1): cambio global (hospital complementario)
+      - T baja (~0): cambio local (hospital cercano)
+      - Mantiene tamaño p y unicidad
+      - Se aplica a cada posición con prob indpb
+
+    Args:
+        individual : lista ordenada (genes únicos)
+        nH : número total de hospitales
+        p : tamaño del individuo (nº de hospitales abiertos)
+        T : temperatura actual en [0,1]
+        indpb : probabilidad de mutar cada gen
+    """
+
+    H = nH
+    all_idx = set(range(H))
+    max_radius = min(10, H // 2) if H > 1 else 1
+
+    for pos in range(p):
+        if random.random() >= indpb:
+            continue
+
+        current = set(individual)
+        old_gene = individual[pos]
+
+        # ---------------------------
+        #   T ALTA → salto global
+        # ---------------------------
+        if T > 0.8:
+            candidate = (old_gene + H // 2) % H
+
+            if candidate in current:
+                free = list(all_idx - current)
+                if not free:
+                    continue
+                candidate = random.choice(free)
+
+        else:
+            # ---------------------------
+            #   T BAJA → cambio local
+            # ---------------------------
+            radius = max(1, int(1 + T * (max_radius - 1)))
+            candidate = old_gene
+
+            for _ in range(20):
+                offset = random.randint(-radius, radius)
+                if offset == 0:
+                    continue
+                new_gene = (old_gene + offset) % H
+                if new_gene not in current:
+                    candidate = new_gene
+                    break
+
+            # fallback: salto global
+            if candidate == old_gene:
+                comp = (old_gene + H // 2) % H
+                if comp not in current:
+                    candidate = comp
+                else:
+                    free = list(all_idx - current)
+                    if not free:
+                        continue
+                    candidate = random.choice(free)
+
+        # Duplicados: elegir un libre
+        if candidate in current and candidate != old_gene:
+            free = [g for g in (all_idx - current) if g != old_gene]
+            if not free:
+                continue
+            candidate = random.choice(free)
+
+        individual[pos] = candidate
+
+    individual.sort()
+    return (individual,)
+
 def greedy_assignment_with_capacities(
     D: np.ndarray, q: np.ndarray, C: np.ndarray, open_idx: List[int]
 ) -> Tuple[np.ndarray, float, Dict[int, float], float, int]:
@@ -234,7 +312,7 @@ def greedy2_assignment_with_capacities(
     q: np.ndarray,
     C: np.ndarray,
     open_idx: List[int],
-    k: int = 6,
+    k: int = 20,
     city_home: Optional[np.ndarray] = None,   # se ignora; se infiere el "home" con D==0
     stickiness: bool = True,                  # se ignora
     order: str = "demand_desc",               # se usa demanda descendente
@@ -561,6 +639,90 @@ def fitness_function_factory(D: np.ndarray, q: np.ndarray, C: np.ndarray, bigM: 
 
     return fitness
 
+def fitness_function_factory_pmedian(
+    D: np.ndarray,
+    q: np.ndarray,
+    C: np.ndarray,
+    bigM: float = 1e6,
+    unserved_penalty: float = 1.0,
+):
+    """
+    Fitness para p-medianas capacitado:
+      - Usa greedy2_assignment_with_capacities para respetar capacidades.
+      - Objetivo principal: minimizar la DISTANCIA MEDIA PONDERADA por demanda
+        (no el máximo).
+      - Penaliza demanda no servida y, opcionalmente, desbalanceo de ocupaciones.
+
+      F = avg_dist + unserved_penalty * (demanda_no_servida) + pen_occ
+    """
+    V, H = D.shape
+    q = np.asarray(q, dtype=float)
+    C = np.asarray(C, dtype=float)
+    D = np.asarray(D, dtype=float)
+
+    def fitness(individual: List[int]) -> Tuple[float]:
+        # Sanity check: sin duplicados
+        p = len(individual)
+        if len(set(individual)) != p:
+            return (bigM,)
+
+        # Asignación greedy capacitada (misma que en p-centros)
+        assign, Z, cap_left, penalty_unserved, num_unserved = \
+            greedy2_assignment_with_capacities(D, q, C, individual)
+
+        # -------------------------------
+        # 1) Distancia media (p-mediana)
+        # -------------------------------
+        assign = np.asarray(assign, dtype=int)
+
+        # Ciudades servidas (tienen hospital asignado y q>0)
+        served_mask = (assign >= 0) & (q > 0)
+        if np.any(served_mask):
+            total_served = float(np.sum(q[served_mask]))
+            # Distancia al hospital asignado principal
+            rows = np.arange(V)[served_mask]
+            d_served = D[rows, assign[served_mask]]
+            # media ponderada por demanda
+            avg_dist = float(np.sum(q[served_mask] * d_served) / total_served)
+        else:
+            # Nadie servido -> fitness enorme
+            avg_dist = bigM
+
+        # -------------------------------------------------
+        # 2) Penalización suave por "desbalance" de uso de
+        #    hospitales (misma idea que en tu función p-center)
+        # -------------------------------------------------
+        eps = 1e-12
+        phis = []
+        for j in individual:
+            Cj = float(C[j])
+            if Cj <= 0:
+                continue
+            cap_rem = float(cap_left.get(j, Cj))
+            used = max(0.0, Cj - cap_rem)
+            u = used / Cj  # ocupación en [0,1]
+            u = min(max(u, eps), 1.0 - eps)
+
+            Hbin = -(u * math.log(u) + (1.0 - u) * math.log(1.0 - u))
+            phi = 1.0 - (Hbin / math.log(2.0))   # 0 en 0.5, ~1 en 0 o 1
+            phis.append(phi)
+
+        mean_phi = (sum(phis) / len(phis)) if phis else 0.0
+        alpha_phi = 1e-3       # mismo orden de magnitud que en tu versión
+        pen_occ = alpha_phi * mean_phi
+
+        # ---------------------------------
+        # 3) Penalización por no servidos
+        # ---------------------------------
+        penalty_unserved_term = unserved_penalty * penalty_unserved
+
+        # Fitness final (minimizar)
+        F = avg_dist + penalty_unserved_term + pen_occ
+        return (F,)
+
+    return fitness
+
+
 def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -586,7 +748,7 @@ def build_deap_toolbox(D: np.ndarray, q: np.ndarray, C: np.ndarray, p: int, seed
     # Selección, cruce, mutación
     toolbox.register("select", tools.selTournament, tournsize=3)
     toolbox.register("mate", crossover_set_based, nH=H, p=p)
-    toolbox.register("mutate", mutation_1swap, nH=H, p=p, indpb=0.2)
+    toolbox.register("mutate", mut_replace_gene, nH=H, p=p, indpb=0.2)
 
     return toolbox
 

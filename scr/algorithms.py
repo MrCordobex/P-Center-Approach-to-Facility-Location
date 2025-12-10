@@ -1,6 +1,6 @@
 import random
 import math
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional, Callable
 from copy import deepcopy
 import numpy as np
 import pandas as pd
@@ -8,7 +8,7 @@ from collections import deque
 from deap import base, creator, tools, algorithms
 from scr.functions import _mk_ind, _evaluate, _init_logbook, _record_log, _neighbors_swaps, init_population_max_diversity
 from sklearn.cluster import KMeans
-
+from scr.functions import greedy2_assignment_with_capacities
 from scr.functions import _mk_ind, _evaluate, _init_logbook, _record_log, _neighbors_swaps, local_search_1swap_ind
 
 
@@ -490,8 +490,85 @@ def run_aco_subset(toolbox,
     return pop, hof, log
 
 
-# Algoritmo ACME
+def _kmeans_representatives(population, k: int, max_iter: int = 10):
+    """
+    Aplica K-Means (sklearn) sobre la población (vectores de genes) y devuelve
+    una lista de individuos REPRESENTANTES (medoides) de cada cluster.
+    No se modifica la población.
+
+    - population: lista de individuos (cada uno es una lista de índices de hospitales).
+    - k: nº de clusters.
+    - max_iter: nº máximo de iteraciones de KMeans.
+    """
+    N = len(population)
+    if N == 0 or k <= 0:
+        return []
+
+    # Asumimos todos los individuos tienen misma longitud (p)
+    p_dim = len(population[0])
+    X = np.array([np.array(ind, dtype=float) for ind in population])  # (N, p_dim)
+
+    k_eff = min(k, N)
+
+    # K-Means con sklearn (centramos en velocidad y estabilidad)
+    kmeans = KMeans(
+        n_clusters=k_eff,
+        n_init=10,          # varias inicializaciones para evitar malos mínimos
+        max_iter=max_iter,
+        random_state=None   # si quieres reproducibilidad: usa 'seed'
+    )
+    kmeans.fit(X)
+
+    labels = kmeans.labels_              # (N,)
+    centroids = kmeans.cluster_centers_  # (k_eff, p_dim)
+
+    reps = []
+    for j in range(k_eff):
+        mask = (labels == j)
+        if not np.any(mask):
+            continue
+        idxs = np.where(mask)[0]
+        X_cluster = X[idxs]                     # puntos del cluster j
+        c = centroids[j][None, :]              # centroide (1, p_dim)
+        d2_cluster = ((X_cluster - c) ** 2).sum(axis=1)  # distancias^2
+        best_idx = idxs[int(np.argmin(d2_cluster))]
+        rep = deepcopy(population[best_idx])
+        reps.append(rep)
+
+    return reps
+
+
+def _local_search(ind, toolbox, ls_iters):
+    """
+    Búsqueda local rápida sobre un representante:
+      - Punto de partida: clon del individuo dado.
+      - Vecindario: aplicar la mutación registrada en el toolbox.
+      - Se aceptan sólo mejoras (Hill Climbing simple).
+    Devuelve el mejor individuo encontrado (NO modifica el original).
+    """
+    best = deepcopy(ind)
+    if not best.fitness.valid:
+        _evaluate(toolbox, best)
+
+    best_f = float(best.fitness.values[0])
+
+    for _ in range(ls_iters):
+        cand = deepcopy(best)
+        # En la búsqueda local aplicamos SIEMPRE mutación (sin mutpb)
+        #toolbox.mutate(cand,T=T)
+        toolbox.mutate(cand)
+        _evaluate(toolbox, cand)
+        cf = float(cand.fitness.values[0])
+        if cf < best_f:
+            best, best_f = cand, cf
+
+    return best
+
+
 def run_acme(toolbox,p: int,
+             D: np.ndarray,
+             q: np.ndarray,
+             C: np.ndarray,
              ngen: int = 200,
              mu_pop: int = 200,
              cxpb: float = 0.8,
@@ -502,7 +579,8 @@ def run_acme(toolbox,p: int,
              ls_iters: int = 5,
              kmeans_max_iter: int = 10,
              seed: int = 0,
-             verbose: bool = True):
+             verbose: bool = True,
+             callback: Optional[Callable] = None):
     """
     Algoritmo genético tipo eaSimple + módulo ACME:
 
@@ -546,83 +624,9 @@ def run_acme(toolbox,p: int,
     if verbose:
         print(f"[ACME-GA] gen=0 pop_min={min(fits0):.6f} best_global={hof[0].fitness.values[0]:.6f}")
 
-    # --- Helpers internos ---
-
-        def _kmeans_representatives(population, k: int, max_iter: int = 10):
-            """
-            Aplica K-Means (sklearn) sobre la población (vectores de genes) y devuelve
-            una lista de individuos REPRESENTANTES (medoides) de cada cluster.
-            No se modifica la población.
-
-            - population: lista de individuos (cada uno es una lista de índices de hospitales).
-            - k: nº de clusters.
-            - max_iter: nº máximo de iteraciones de KMeans.
-            """
-            N = len(population)
-            if N == 0 or k <= 0:
-                return []
-
-            # Asumimos todos los individuos tienen misma longitud (p)
-            p_dim = len(population[0])
-            X = np.array([np.array(ind, dtype=float) for ind in population])  # (N, p_dim)
-
-            k_eff = min(k, N)
-
-            # K-Means con sklearn (centramos en velocidad y estabilidad)
-            kmeans = KMeans(
-                n_clusters=k_eff,
-                n_init=10,          # varias inicializaciones para evitar malos mínimos
-                max_iter=max_iter,
-                random_state=None   # si quieres reproducibilidad: usa 'seed'
-            )
-            kmeans.fit(X)
-
-            labels = kmeans.labels_              # (N,)
-            centroids = kmeans.cluster_centers_  # (k_eff, p_dim)
-
-            reps = []
-            for j in range(k_eff):
-                mask = (labels == j)
-                if not np.any(mask):
-                    continue
-                idxs = np.where(mask)[0]
-                X_cluster = X[idxs]                     # puntos del cluster j
-                c = centroids[j][None, :]              # centroide (1, p_dim)
-                d2_cluster = ((X_cluster - c) ** 2).sum(axis=1)  # distancias^2
-                best_idx = idxs[int(np.argmin(d2_cluster))]
-                rep = deepcopy(population[best_idx])
-                reps.append(rep)
-
-            return reps
-
-
-    def _local_search(ind):
-        """
-        Búsqueda local rápida sobre un representante:
-          - Punto de partida: clon del individuo dado.
-          - Vecindario: aplicar la mutación registrada en el toolbox.
-          - Se aceptan sólo mejoras (Hill Climbing simple).
-        Devuelve el mejor individuo encontrado (NO modifica el original).
-        """
-        best = deepcopy(ind)
-        if not best.fitness.valid:
-            _evaluate(toolbox, best)
-
-        best_f = float(best.fitness.values[0])
-
-        for _ in range(ls_iters):
-            cand = deepcopy(best)
-            # En la búsqueda local aplicamos SIEMPRE mutación (sin mutpb)
-            toolbox.mutate(cand)
-            _evaluate(toolbox, cand)
-            cf = float(cand.fitness.values[0])
-            if cf < best_f:
-                best, best_f = cand, cf
-
-        return best
-
     # --- Bucle principal GA + ACME ---
     for gen in range(1, ngen + 1):
+        #T = 1.0 -(ngen-1)/max(1, ngen-1)
         # Selección
         selected = toolbox.select(pop, len(pop))
         # Clonamos con deepcopy, no tools.clone
@@ -641,6 +645,7 @@ def run_acme(toolbox,p: int,
         # Mutación
         for mutant in offspring:
             if random.random() < mutpb:
+                #toolbox.mutate(mutant, T=T)
                 toolbox.mutate(mutant)
                 if hasattr(mutant.fitness, "values"):
                     del mutant.fitness.values
@@ -653,7 +658,7 @@ def run_acme(toolbox,p: int,
         # Reemplazo generacional completo
         pop[:] = offspring
 
-        # === MÓDULO ACME CADA acme_period GENERACIONES ===
+                # === MÓDULO ACME CADA acme_period GENERACIONES ===
         if acme_period > 0 and (gen % acme_period == 0):
             reps = _kmeans_representatives(pop, k_clusters, max_iter=kmeans_max_iter)
 
@@ -664,15 +669,33 @@ def run_acme(toolbox,p: int,
 
                 current_best_val = float(hof[0].fitness.values[0])
 
+                # -------- NUEVO: mejor de la población y su factibilidad --------
+                best_pop = tools.selBest(pop, 1)[0]
+                # Evaluamos factibilidad con greedy2_assignment_with_capacities
+                _, _, _, penalty_unserved_best, _ = greedy2_assignment_with_capacities(
+                    D, q, C, list(best_pop)
+                )
+                pop_best_is_feasible = (penalty_unserved_best == 0.0)
+                # ----------------------------------------------------------------
+
                 for rep in reps:
-                    cand = _local_search(rep)
+                    cand = _local_search(rep, toolbox, ls_iters)
                     cand_val = float(cand.fitness.values[0])
 
-                    if cand_val < current_best_val:
+                    if cand_val <= current_best_val:
+                        # Actualizamos Hall of Fame (como antes)
                         hof.update([cand])
                         current_best_val = float(hof[0].fitness.values[0])
+                        # ---- NUEVO: si la mejor de la población es INFECTIBLE,
+                        # metemos este candidato mejorado dentro de la población ----
+                        if not pop_best_is_feasible:
+                            worst = tools.selWorst(pop, 1)[0]
+                            pop[pop.index(worst)] = cand
+                        
                         if verbose:
                             print(f"[ACME] gen={gen} nueva mejor solución encontrada: {current_best_val:.6f}")
+                        
+
 
         # Actualizar Hall of Fame con la población (como en un GA normal)
         hof.update(pop)
@@ -681,9 +704,16 @@ def run_acme(toolbox,p: int,
         fits = [float(ind.fitness.values[0]) for ind in pop]
         _record_log(log, gen=gen, fitness_values=fits)
 
+        if callback:
+            callback(gen, ngen, hof)
+
         if verbose:
             print(f"[ACME-GA] gen={gen} pop_min={min(fits):.6f} best_global={hof[0].fitness.values[0]:.6f}")
-        # aplicar simulated annealing al mejor individuo de la generación
+        
+    # aplicar simulated annealing al mejor individuo de la generación
+    if callback:
+        callback(ngen, ngen, hof, message="Refinando la solución con Simulated Annealing...")
+
     pop_sa, hof_sa, _ = run_simulated_annealing(toolbox,
                         nH=133,
                         p=p,
@@ -704,6 +734,7 @@ def run_acme(toolbox,p: int,
 # =========================
 def run_memetic_ga(toolbox,
                    D,
+                   p: int,
                    pop_size: int = 100,
                    ngen: int = 100,
                    cxpb: float = 0.9,
@@ -714,20 +745,40 @@ def run_memetic_ga(toolbox,
                    seed: int = 0,
                    verbose: bool = True):
     """
-    GA memético para tu p-center capacitado.
+    GA MEMÉTICO para p-center capacitado:
+
+      - Población de soluciones (subconjuntos de p hospitales).
+      - Parte memética: Tabu Search sobre los mejores individuos cada
+        'memetic_interval' generaciones.
+
+    Parámetros:
+      toolbox            : toolbox DEAP ya configurado (individuos, fitness, mate, mutate, select).
+      D                  : matriz de distancias (V x H).
+      p                  : número de hospitales a abrir.
+      pop_size           : tamaño de población.
+      ngen               : número de generaciones.
+      cxpb               : probabilidad de crossover.
+      mutpb              : probabilidad de mutación.
+      memetic_interval   : cada cuántas generaciones se aplica Tabu Search.
+      memetic_best_k     : número de mejores individuos que se mejoran con Tabu.
+      hof_size           : tamaño del Hall of Fame.
+      seed               : semilla aleatoria.
+      verbose            : si True, imprime estadísticos por generación.
 
     Devuelve:
-      - pop: población final
-      - hof: Hall of Fame (mejores individuos)
-      - log: logbook con (gen, min, avg, max)
+      pop : población final
+      hof : Hall of Fame (mejores individuos)
+      log : logbook con estadísticas (min, avg, max por gen)
     """
+
+    random.seed(seed)
     rng = random.Random(seed)
     V, nH = D.shape
 
     log = _init_logbook()
     hof = tools.HallOfFame(hof_size)
 
-    # === Población inicial
+    # === Población inicial ===
     pop = toolbox.population(n=pop_size)
 
     # Evaluar población inicial
@@ -741,26 +792,33 @@ def run_memetic_ga(toolbox,
     if verbose:
         print(f"[GA] gen=0 min={min(fits):.6f} avg={sum(fits)/len(fits):.6f} max={max(fits):.6f}")
 
-    # === Bucle evolutivo
+    # === Bucle evolutivo ===
     for gen in range(1, ngen + 1):
-        # Selección -> como haces en otros algoritmos
+
+        # --------- NUEVO: temperatura de esta generación (en [0,1]) ---------
+        # Lineal: gen=1 -> T≈1 ; gen=ngen -> T≈0
+        T = 1.0 - (gen - 1) / max(1, (ngen - 1))
+        # --------------------------------------------------------------------
+
+        # Selección
         offspring = toolbox.select(pop, len(pop))
-        # Clonado (usamos deepcopy, no tools.clone)
         offspring = [deepcopy(ind) for ind in offspring]
 
         # Crossover
         for i in range(0, len(offspring), 2):
             if i + 1 >= len(offspring):
                 break
-            if random.random() < cxpb:
+            if rng.random() < cxpb:
                 offspring[i], offspring[i+1] = toolbox.mate(offspring[i], offspring[i+1])
                 del offspring[i].fitness.values
                 del offspring[i+1].fitness.values
 
         # Mutación
         for ind in offspring:
-            if random.random() < mutpb:
-                toolbox.mutate(ind)
+            if rng.random() < mutpb:
+                # --------- CAMBIO IMPORTANTE: pasar T a la mutación ---------
+                toolbox.mutate(ind, T=T)
+                # ------------------------------------------------------------
                 del ind.fitness.values
 
         # Evaluar descendencia
@@ -768,23 +826,40 @@ def run_memetic_ga(toolbox,
         for ind in invalid_ind:
             ind.fitness.values = toolbox.evaluate(ind)
 
-        # Elitismo simple: mantén el mejor de pop anterior
+        # Elitismo: guardar el mejor de la generación anterior
         elite = deepcopy(tools.selBest(pop, 1)[0])
 
         # Reemplazo generacional
         pop = offspring
-        # insertar élite
         worst = tools.selWorst(pop, 1)[0]
         pop[pop.index(worst)] = elite
 
-        # === MODO MEMÉTICO: búsqueda local sobre los mejores cada X generaciones
-        if memetic_interval > 0 and gen % memetic_interval == 0:
+        # === BÚSQUEDA LOCAL (modo memético con TABU / SA) ===
+        if memetic_interval > 0 and gen % memetic_interval == 0 and memetic_best_k > 0:
             best_inds = tools.selBest(pop, memetic_best_k)
+
             for ind in best_inds:
-                local_search_1swap_ind(ind, toolbox, nH,
-                                       max_iterations=10,
-                                       neighbors_per_iteration=5,
-                                       rng=rng)
+                start_genes = list(ind)
+                hc_seed = rng.randint(0, 10**9)
+
+                _, hc_hof, _ = run_simulated_annealing(
+                    toolbox,
+                    nH=nH,
+                    p=p,
+                    start=start_genes,
+                    T0=100.0,
+                    Tmin=1e-3,
+                    alpha=0.95,
+                    iters_per_T=50,
+                    seed=hc_seed,      # ya que lo has calculado ;)
+                    hof_size=1,
+                    verbose=False
+                )
+                local_best = hc_hof[0]
+
+                if local_best.fitness.values[0] < ind.fitness.values[0]:
+                    ind[:] = local_best[:]
+                    ind.fitness.values = local_best.fitness.values
 
         # Actualizar Hall of Fame
         hof.update(pop)
