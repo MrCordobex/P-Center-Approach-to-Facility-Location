@@ -1,0 +1,10 @@
+streamlit
+folium
+streamlit-folium
+pandas
+numpy
+deap
+scikit-learn
+matplotlib
+imageio
+Pillow

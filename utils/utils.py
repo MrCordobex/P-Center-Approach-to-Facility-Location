@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from typing import List, Tuple, Dict
 import folium
-from scr.functions import greedy_assignment_with_capacities
+from matplotlib.lines import Line2D
 
 def logbook_to_dataframe(log) -> pd.DataFrame:
     """Convierte el logbook de DEAP a DataFrame con columnas gen, min, avg, max, std (si existen)."""
@@ -23,31 +23,84 @@ def plot_evolution_threshold(df_stats: pd.DataFrame,
                              threshold: float = 1000.0,
                              replacement_value: float = 300.0):
     """
-    Grafica min/avg/max por generación. Cualquier valor > threshold
-    se reemplaza por replacement_value únicamente para la visualización.
+    Grafica min/avg/max por generación.
+
+    - Valores > threshold se representan en la posición 'replacement_value'
+      (clipping visual).
+    - Tramos factibles (<= threshold): línea continua.
+    - Tramos no factibles  (> threshold): línea discontinua.
+    - Se rellena el área entre min y max (ambos clipados).
     """
     if df_stats.empty:
         print("No hay estadísticas para graficar.")
         return
 
-    gens  = df_stats["gen"].to_numpy()
+    gens = df_stats["gen"].to_numpy()
     cols = [c for c in ["min", "avg", "max"] if c in df_stats.columns]
 
-    plt.figure()
-    for c in cols:
-        arr = df_stats[c].to_numpy(dtype=float).copy()
-        mask = np.isfinite(arr) & (arr > threshold)
-        arr[mask] = replacement_value
-        plt.plot(gens, arr, label=c)
+    if not cols:
+        print("No hay columnas 'min', 'avg' o 'max' para graficar.")
+        return
 
-    plt.xlabel("Generación")
+    plt.figure()
+
+    # --- Graficar cada serie (min / avg / max) con sólido + discontinua --- #
+    for c in cols:
+        arr = df_stats[c].to_numpy(dtype=float)
+        # Limpiamos no finitos
+        arr[~np.isfinite(arr)] = np.nan
+
+        # Parte factible: valores <= threshold, tal cual
+        y_feas = np.where(arr <= threshold, arr, np.nan)
+
+        # Parte no factible: > threshold, se muestra en replacement_value
+        y_infeas = np.where(arr > threshold, replacement_value, np.nan)
+
+        # Línea continua (factible) — con etiqueta
+        line_solid, = plt.plot(gens, y_feas, label=c)
+
+        # Misma color para la parte discontinua (no factible)
+        color = line_solid.get_color()
+        plt.plot(gens, y_infeas, linestyle="--", color=color)
+
+    # --- Relleno entre min y max (si están disponibles) --- #
+    if "min" in cols and "max" in cols:
+        min_arr = df_stats["min"].to_numpy(dtype=float)
+        max_arr = df_stats["max"].to_numpy(dtype=float)
+
+        # Limpiar NaNs / inf
+        min_arr[~np.isfinite(min_arr)] = np.nan
+        max_arr[~np.isfinite(max_arr)] = np.nan
+
+        # Clip visual: > threshold se muestran en replacement_value
+        min_clip = np.where(min_arr > threshold, replacement_value, min_arr)
+        max_clip = np.where(max_arr > threshold, replacement_value, max_arr)
+
+        plt.fill_between(gens, min_clip, max_clip, alpha=0.15)
+
+    # --- Leyenda: añadir entrada para la parte discontinua (no factible) --- #
+    # Creamos un "handle" ficticio para explicar las líneas discontinuas.
+    infeas_handle = Line2D(
+        [0], [0],
+        linestyle="--",
+        color="black",
+        label="infeasible segment (fitness > threshold)"
+    )
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    handles.append(infeas_handle)
+    labels.append("infeasible solution")
+    plt.legend(handles, labels)
+
+    plt.xlabel("Generation")
     plt.ylabel("Fitness")
-    plt.title(f"Evolución del fitness (>{threshold:g} → {replacement_value:g})")
-    plt.legend()
+    plt.title(f"Evolution of fitness ")
+    plt.grid(True)
     plt.tight_layout()
     plt.savefig(rute, dpi=150)
     plt.close()
     print(f"Gráfica de evolución guardada en: {rute}")
+
 
 def solution_dataframe(best_indices: List[int], hospitals_csv: str = "Hospitales_Con_Capacidad.csv",
                        name_col: str = "nombre", locality_col: str = "localidad") -> pd.DataFrame:
@@ -252,6 +305,7 @@ def create_map_solution(
     m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
 
     # Asignación greedy (tu función)
+    from scr.functions import greedy_assignment_with_capacities
     assign_of_city, Z, cap_left, penalty_unserved, num_unserved = greedy_assignment_with_capacities(
         D, q, C, open_idx
     )

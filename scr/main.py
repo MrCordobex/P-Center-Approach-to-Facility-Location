@@ -1,8 +1,14 @@
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
 import utils.utils as ut
 import scr.algorithms as alg
 import scr.functions as fn
 import pandas as pd
+<<<<<<< HEAD
 import random
+=======
+
+>>>>>>> origin/main
 # para ejecutar desde la raíz del proyecto hacemos python -m scr.main
 # -----------------------------------------------------------
 # Ajuste capacidades y demandas
@@ -15,10 +21,15 @@ ut.capacities_demand(
 )
 # -----------------------------------------------------------
 # Parámetros del problema
+<<<<<<< HEAD
 P = 70  # número de hospitales a abrir (ajústalo)
 # Semilla ramdom para reproducibilidad
 SEED = random.randint(0, 10**9)
 random.seed(SEED)
+=======
+P = 10  # número de hospitales a abrir (ajústalo)
+SEED = 3
+>>>>>>> origin/main
 
 # Cargar datos
 D, q, C, city_ids, hosp_ids = ut.load_data(
@@ -34,6 +45,7 @@ toolbox = fn.build_deap_toolbox(D, q, C, p=P, seed=SEED)
 
 # -----------------------------------------------------------
 
+<<<<<<< HEAD
 pop, hof, log =  alg.run_memetic_ga(toolbox,
                    D,
                    p=P,
@@ -47,6 +59,23 @@ pop, hof, log =  alg.run_memetic_ga(toolbox,
                    seed=SEED,
                    verbose = True)
 
+=======
+pop, hof, log =  alg.run_acme(toolbox,p=P,
+             D=D,
+             q=q,
+             C=C,
+             ngen=100,
+             mu_pop=200,
+             cxpb=0.9,
+             mutpb=0.3,
+             hof_size=5,
+             k_clusters=5,
+             acme_period=5,
+             ls_iters=500,
+             kmeans_max_iter=10,
+             seed=SEED,
+             verbose=True)
+>>>>>>> origin/main
 # -----------------------------------------------------------
 #=== Resultados finales ===
 # Resultados
@@ -65,7 +94,7 @@ _ = ut.create_map_solution(
     D=D, q=q, C=C, open_idx=list(best),
     cities_csv="data/processed/Ciudades_Con_Demanda.csv",
     hospitals_csv="data/processed/Hospitales_Con_Capacidad.csv",
-    out_html="runs/solucion_map.html",
+    out_html="runs/solucion_map1.html",
     draw_lines=True  # pon True si quieres líneas ciudad→hospital
 )
 print("Mapa guardado en: runs/solucion_map.html")
@@ -75,7 +104,7 @@ df_stats.to_csv("runs/evolucion_fitness.csv", index=False)
 print("Estadísticas por generación guardadas en: runs/evolucion_fitness.csv")
 
 # Usa el mismo bigM que diste en toolbox.evaluate (yo usé 1e9 arriba)
-ut.plot_evolution_threshold(df_stats, rute="runs/evolucion_fitness.png", threshold=1000.0, replacement_value=300.0)
+ut.plot_evolution_threshold(df_stats, rute="runs/figuras/evolucion_fitness_ACME.png", threshold=180.0, replacement_value=180.0)
 # === 2) DataFrame de hospitales seleccionados (nombre, localidad) ===
 df_sol = ut.solution_dataframe(best, hospitals_csv="data/processed/Hospitales_Con_Capacidad.csv",
                             name_col="nombre", locality_col="localidad")

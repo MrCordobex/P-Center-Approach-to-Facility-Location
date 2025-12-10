@@ -1,4 +1,5 @@
 nombre,localidad
+<<<<<<< HEAD
 Hospital Psiquiátrico Penitenciario,Sevilla
 Hospital Universitario Torrecardenas,Almería
 Hospital La Inmaculada,Huércal-Overa
@@ -69,3 +70,15 @@ Hospital de Alta Resolución de Lebrija,Lebrija
 Hospital Vithas Granada,Granada
 Hospital de Alta Resolución de Especialidades de La Janda,Vejer de la Frontera
 Hospital de Alta Resolución de Guadix,Guadix
+=======
+Hospital Universitario de Poniente,"Ejido, El"
+Hospital de La Línea de La Concepción,"Línea de la Concepción, La"
+Hospital Materno - Infantil del H.U. Reina Sofia,Córdoba
+Hospital de Alta Resolución Valle del Guadiato,Peñarroya-Pueblonuevo
+Hospital de Baza,Baza
+Hospital de Riotinto,Minas de Riotinto
+Hospital Universitario de Jaén,Jaén
+Hospital Universitario Virgen de La Victoria,Málaga
+Hospital La Merced,Osuna
+Hospital Universitario Virgen del Rocío,Sevilla
+>>>>>>> origin/main
